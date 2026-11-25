@@ -33,7 +33,7 @@ return [
     |
     */
     'format' => env('IMAGE_OPTIMIZATION_FORMAT', 'webp'),
-    'quality' => (int) env('IMAGE_OPTIMIZATION_QUALITY', 80),
+    'quality' => (int) env('IMAGE_OPTIMIZATION_QUALITY', 90),
 
     /*
     |--------------------------------------------------------------------------
@@ -43,7 +43,7 @@ return [
     | Maximum upload size before processing. Default is 10 MB (10240 KB).
     |
     */
-    'max_file_size' => (int) env('IMAGE_OPTIMIZATION_MAX_SIZE', 10240),
+    'max_file_size' => (int) env('IMAGE_OPTIMIZATION_MAX_SIZE', 20480),
 
     /*
     |--------------------------------------------------------------------------

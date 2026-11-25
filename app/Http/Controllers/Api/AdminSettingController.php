@@ -49,7 +49,7 @@ class AdminSettingController extends ApiController
             'smtp_encryption' => ['sometimes', 'nullable', 'in:tls,ssl,smtp,smtps'],
             'smtp_from_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'smtp_from_name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,svg', 'max:2048'],
+            'logo' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,svg', 'max:20480'],
             'favicon' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,ico,svg', 'max:1024'],
             'remove_logo' => ['sometimes', 'boolean'],
             'remove_favicon' => ['sometimes', 'boolean'],

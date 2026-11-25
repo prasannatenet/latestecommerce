@@ -45,7 +45,7 @@ class BackendCategoryController extends Controller
             'description' => 'nullable|string',
             'position'    => 'nullable|integer',
             'parent_id'   => 'nullable|exists:categories,id',
-            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:20480',
         ]);
 
         $data = $request->only('name', 'description', 'position', 'parent_id');
@@ -89,7 +89,7 @@ class BackendCategoryController extends Controller
             'description' => 'nullable|string',
             'position'    => 'nullable|integer',
             'parent_id'   => 'nullable|exists:categories,id',
-            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:20480',
         ]);
 
         $data = $request->only('name', 'description', 'position', 'parent_id');

@@ -122,7 +122,7 @@ class BackendSettingController extends Controller
             'smtp_from_email' => 'nullable|email|max:255',
             'smtp_from_name' => 'nullable|string|max:255',
             'test_email' => 'nullable|email|max:255',
-            'logo' => 'nullable|image|mimes:jpg,jpeg,png,svg|max:2048',
+            'logo' => 'nullable|image|mimes:jpg,jpeg,png,svg|max:20480',
             'favicon' => 'nullable|image|mimes:jpg,jpeg,ico,svg,png|max:1024',
         ]);
     }

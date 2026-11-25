@@ -96,9 +96,9 @@ class BackendProductController extends Controller
             'category_id'       => 'nullable|exists:categories,id',
             'is_active'         => 'boolean',
             'product_type'      => 'required|in:simple,variable',
-            'primary_image'     => 'nullable|mimes:jpg,jpeg,png,webp,avif|max:2048',
+            'primary_image'     => 'nullable|mimes:jpg,jpeg,png,webp,avif|max:20480',
             'images'            => 'nullable|array',
-            'images.*'          => 'nullable|mimes:jpg,jpeg,png,webp,avif|max:2048',
+            'images.*'          => 'nullable|mimes:jpg,jpeg,png,webp,avif|max:20480',
             'videos'            => 'nullable|array|max:5',
             'videos.*'          => 'nullable|file|mimes:mp4,webm,mov|max:51200',
             'tag_ids'           => 'nullable|array',
@@ -246,9 +246,9 @@ class BackendProductController extends Controller
             'category_id'       => 'nullable|exists:categories,id',
             'is_active'         => 'boolean',
             'product_type'      => 'required|in:simple,variable',
-            'primary_image'     => 'nullable|mimes:jpg,jpeg,png,webp,avif|max:2048',
+            'primary_image'     => 'nullable|mimes:jpg,jpeg,png,webp,avif|max:20480',
             'images'            => 'nullable|array',
-            'images.*'          => 'nullable|mimes:jpg,jpeg,png,webp,avif|max:2048',
+            'images.*'          => 'nullable|mimes:jpg,jpeg,png,webp,avif|max:20480',
             'videos'            => 'nullable|array|max:5',
             'videos.*'          => 'nullable|file|mimes:mp4,webm,mov|max:51200',
             'tag_ids'           => 'nullable|array',
@@ -482,7 +482,7 @@ class BackendProductController extends Controller
             'attributes'      => 'required|array',
             'is_active'       => 'boolean',
             'images'          => 'nullable|array|max:10',
-            'images.*'        => 'mimes:jpg,jpeg,png,webp,avif|max:2048',
+            'images.*'        => 'mimes:jpg,jpeg,png,webp,avif|max:20480',
         ]);
 
         $validated['sale_price'] = $this->resolveVariationSalePrice(
@@ -513,7 +513,7 @@ class BackendProductController extends Controller
             'attributes'      => 'required|array',
             'is_active'       => 'boolean',
             'images'          => 'nullable|array|max:10',
-            'images.*'        => 'mimes:jpg,jpeg,png,webp,avif|max:2048',
+            'images.*'        => 'mimes:jpg,jpeg,png,webp,avif|max:20480',
         ]);
 
         $validated['sale_price'] = $this->resolveVariationSalePrice(

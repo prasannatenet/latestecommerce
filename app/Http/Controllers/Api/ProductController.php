@@ -258,7 +258,7 @@ class ProductController extends ApiController
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['required', 'string', 'max:2000'],
             'images' => ['nullable', 'array', 'max:3'],
-            'images.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'images.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:20480'],
         ];
 
         if ($review) {
