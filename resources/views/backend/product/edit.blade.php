@@ -106,7 +106,7 @@
                                               style="top:6px;left:6px;z-index:1;">Primary</span>
                                     @endif
                                     <video src="{{ $video->stream_url }}" controls preload="metadata"
-                                           style="width:220px;height:140px;object-fit:cover;border-radius:12px;border:1px solid var(--df-border-color);background:#000;"></video>
+                                           style="width:220px;height:140px;object-fit:cover;border-radius:12px;border:1px solid var(--df-border-color);background:var(--primary);"></video>
                                     <button type="button"
                                             class="btn btn-sm btn-danger position-absolute"
                                             style="top:6px;right:6px;line-height:1;"

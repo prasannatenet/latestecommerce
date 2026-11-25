@@ -65,7 +65,7 @@
                                           style="top:6px;left:6px;z-index:1;">Primary</span>
                                 @endif
                                 <video src="{{ $video->stream_url }}" controls preload="metadata"
-                                       style="width:240px;height:150px;object-fit:cover;border-radius:14px;border:1px solid var(--df-border-color);background:#000;"></video>
+                                       style="width:240px;height:150px;object-fit:cover;border-radius:14px;border:1px solid var(--df-border-color);background:var(--primary);"></video>
                             </div>
                         @endforeach
                     </div>

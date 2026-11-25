@@ -1,11 +1,11 @@
 .checkout-page {
-    --checkout-ink: #17120f;
-    --checkout-muted: #746d63;
-    --checkout-gold: #b68b3b;
-    --checkout-line: #e9e3d8;
+    --checkout-ink: var(--text-primary);
+    --checkout-muted: var(--text-secondary);
+    --checkout-gold: var(--gold);
+    --checkout-line: var(--border);
     --checkout-paper: #fff;
     color: var(--checkout-ink);
-    background: #f8f6f1;
+    background: var(--background);
     font-family: var(--font-body, "Inter", sans-serif);
 }
 
@@ -21,7 +21,7 @@
     padding: 42px 0 38px;
     background:
         radial-gradient(ellipse at 82% 10%, rgb(182 139 59 / 18%), transparent 34%),
-        linear-gradient(115deg, #100e0b, #21190e 58%, #100e0b);
+        linear-gradient(115deg, var(--primary), var(--primary-hover) 58%, var(--primary));
     color: #fff;
 }
 
@@ -125,7 +125,7 @@
 .checkout-steps li.is-active > span {
     border-color: var(--checkout-gold);
     background: var(--checkout-gold);
-    color: #17120f;
+    color: var(--text-primary);
 }
 
 .checkout-steps li.is-active small,
@@ -216,8 +216,8 @@
 .checkout-page #checkout-form > div[style*="background:#fff"] > div:first-child,
 .checkout-summary-column > div[style*="background:#fff"] > div:first-child {
     padding: 17px 24px !important;
-    border-bottom: 1px solid #3b3020 !important;
-    background: linear-gradient(110deg, #17120f, #302416) !important;
+    border-bottom: 1px solid var(--primary-hover) !important;
+    background: linear-gradient(110deg, var(--primary), var(--primary-hover)) !important;
 }
 
 .checkout-page #checkout-form > div[style*="background:#fff"] > div:first-child h3,
@@ -340,10 +340,10 @@
     justify-content: center;
     margin-top: 6px;
     padding: 14px 24px !important;
-    border: 1px solid #17120f !important;
+    border: 1px solid var(--primary) !important;
     border-radius: 9px !important;
-    background: #17120f !important;
-    box-shadow: 0 8px 18px rgb(23 18 15 / 15%);
+    background: var(--primary) !important;
+    box-shadow: 0 8px 18px rgb(15 61 50 / 15%);
     color: #fff !important;
     font-size: 14px !important;
     font-weight: 700 !important;
@@ -352,7 +352,7 @@
 }
 
 .checkout-page #place-order-btn:hover:not(:disabled) {
-    background: #593d0b !important;
+    background: var(--primary-hover) !important;
     box-shadow: 0 10px 22px rgb(23 18 15 / 20%);
     transform: translateY(-1px);
 }
