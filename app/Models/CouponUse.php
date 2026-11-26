@@ -11,6 +11,7 @@ class CouponUse extends Model
         'coupon_id',
         'user_id',
         'order_id',
+        'redemption_year',
     ];
 
     public function coupon(): BelongsTo
@@ -26,5 +27,10 @@ class CouponUse extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    protected function casts(): array
+    {
+        return ['redemption_year' => 'integer'];
     }
 }

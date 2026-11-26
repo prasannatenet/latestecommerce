@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Setting;
 use App\Models\Slider;
 use App\Models\Wishlist;
+use App\Services\CartDrawerCrossSellService;
 use App\Models\Order;
 use App\Models\CustomerActivityEvent;
 use App\Services\CustomerActivityService;
@@ -36,7 +37,12 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Order::updated(function (Order $order): void {
+            if ($order->wasChanged(['status', 'payment_status', 'refund_status'])) {
+                app(ProductRecommendationService::class)->forgetForOrder($order);
+            }
+
             if (! $order->user_id) return;
+            if (! Schema::hasTable('customer_activity_events')) return;
             if ($order->wasChanged('payment_status')) {
                 if ($order->payment_status === 'paid') {
                     app(CustomerActivityService::class)->confirmOrder($order);
@@ -201,6 +207,7 @@ class AppServiceProvider extends ServiceProvider
                 is_array($row) ? ($row['quantity'] ?? 1) : $row->quantity
             ));
             $cartSubtotal = (float) $headerCartItems->sum('subtotal');
+            $cartCrossSellSuggestions = app(CartDrawerCrossSellService::class)->suggestions($headerCartItems);
 
             // Quantities of simple (variation-free) products keyed by product id.
             // Exposed to the layout so product-card counters render instantly on
@@ -225,6 +232,7 @@ class AppServiceProvider extends ServiceProvider
             $view->with('headerCartCount', $cartCount)
                 ->with('headerCartItems', $headerCartItems)
                 ->with('headerCartSubtotal', $cartSubtotal)
+                ->with('cartCrossSellSuggestions', $cartCrossSellSuggestions)
                 ->with('headerWishlistCount', $wishlistCount)
                 ->with('headerWishlistProducts', $wishlistProducts)
                 ->with('simpleCartQuantities', $simpleCartQuantities);

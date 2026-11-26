@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Coupon;
 use App\Models\CouponUse;
+use App\Models\Order;
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
@@ -48,6 +50,25 @@ class CouponService
     /** Has this customer already spent this coupon? */
     public function hasRedeemed(Coupon $coupon, ?int $userId = null): bool
     {
+        if ($coupon->type === 'birthday') {
+            if (! $userId) {
+                return false;
+            }
+
+            $year = now()->year;
+            return CouponUse::query()
+                ->where('coupon_id', $coupon->id)
+                ->where('user_id', $userId)
+                ->where(function ($query) use ($year): void {
+                    $query->where('redemption_year', $year)
+                        ->orWhere(function ($legacy) use ($year): void {
+                            $legacy->whereNull('redemption_year')
+                                ->whereYear('created_at', $year);
+                        });
+                })
+                ->exists();
+        }
+
         return in_array((int) $coupon->id, $this->usedCouponIdsFor($userId), true);
     }
 
@@ -59,6 +80,8 @@ class CouponService
         float $subtotal,
         bool $hasAppliedCombo = false,
         ?int $userId = null,
+        ?string $email = null,
+        ?string $phone = null,
     ): ?string
     {
         if ($hasAppliedCombo) {
@@ -86,8 +109,50 @@ class CouponService
         // Checked after the global limits so a dead coupon still explains itself
         // to everyone, and a live one the customer has already spent tells them
         // personally.
-        if ($this->hasRedeemed($coupon, $userId)) {
+        if ($coupon->type === 'birthday') {
+            if (! $userId) {
+                return 'Sign in and add your date of birth to use this birthday offer.';
+            }
+
+            $dateOfBirth = User::query()->whereKey($userId)->value('date_of_birth');
+            if (! $dateOfBirth) {
+                return 'Add your date of birth to your profile to use this birthday offer.';
+            }
+
+            if (substr((string) $dateOfBirth, 5, 5) !== $now->format('m-d')) {
+                return 'This birthday offer is only available on your birthday.';
+            }
+
+            if ($this->hasRedeemed($coupon, $userId)) {
+                return 'You have already used this birthday offer this year.';
+            }
+        } elseif ($this->hasRedeemed($coupon, $userId)) {
             return 'You have already used this coupon.';
+        }
+
+        if ($coupon->first_purchase_only) {
+            $email = mb_strtolower(trim((string) $email));
+            $phoneDigits = preg_replace('/\D+/', '', (string) $phone);
+
+            if ($email === '' || $phoneDigits === '') {
+                return 'Enter your email address and phone number to check first-purchase eligibility.';
+            }
+
+            $previousPurchase = Order::query()
+                ->whereNotIn('status', ['cancelled', 'failed', 'refunded'])
+                ->where(function ($query) use ($userId, $email, $phoneDigits): void {
+                    if ($userId) {
+                        $query->where('user_id', $userId);
+                    }
+
+                    $query->orWhereRaw("LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(billing_address, '$.email')))) = ?", [$email])
+                        ->orWhereRaw("REGEXP_REPLACE(JSON_UNQUOTE(JSON_EXTRACT(billing_address, '$.phone')), '[^0-9]', '') = ?", [$phoneDigits]);
+                })
+                ->exists();
+
+            if ($previousPurchase) {
+                return 'This coupon is only valid for a first purchase with a new email address and phone number.';
+            }
         }
 
         if (! is_null($coupon->min_order_amount) && $subtotal < (float) $coupon->min_order_amount) {
@@ -147,6 +212,7 @@ class CouponService
                     'code' => (string) $coupon->code,
                     'type' => $coupon->type,
                     'amount' => $coupon->amount !== null ? (float) $coupon->amount : null,
+                    'birthday_discount_type' => $coupon->birthday_discount_type,
                     'buy_quantity' => (int) ($coupon->buy_quantity ?? 0),
                     'get_quantity' => (int) ($coupon->get_quantity ?? 0),
                     'reward_coins' => (int) ($coupon->reward_coins ?? 0),
@@ -172,6 +238,9 @@ class CouponService
 
         return match ($coupon->type) {
             'percent' => $amount.'% OFF',
+            'birthday' => $coupon->birthday_discount_type === 'fixed'
+                ? 'Birthday '.$amount.' fixed amount off'
+                : 'Birthday '.$amount.'% OFF',
             'fixed' => '₹'.$amount.' OFF',
             'buy_get' => 'Buy '.max(1, (int) $coupon->buy_quantity)
                 .', Get '.max(1, (int) $coupon->get_quantity).' Free',
@@ -194,7 +263,8 @@ class CouponService
 
         $subtotal = (float) $cartItems->sum(fn ($item) => (int) $item->quantity * (float) $item->price);
 
-        $discount = match ($coupon->type) {
+        $discountType = $coupon->type === 'birthday' ? ($coupon->birthday_discount_type ?: 'percent') : $coupon->type;
+        $discount = match ($discountType) {
             'percent' => ($subtotal * (float) $coupon->amount) / 100,
             'fixed' => (float) $coupon->amount,
             'buy_get' => $this->calculateBuyGetDiscount($coupon, $cartItems),

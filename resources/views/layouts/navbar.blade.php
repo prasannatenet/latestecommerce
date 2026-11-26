@@ -71,6 +71,11 @@
                     </a>
                     <div class="account-dropdown" id="account-dropdown">
                         <a href="{{ route('account.profile') }}">Profile</a>
+                        <div class="account-coins-balance">
+                            <span><span class="material-symbols-outlined" aria-hidden="true">monetization_on</span> Gehna Coins</span>
+                            <strong>{{ number_format((int) auth()->user()->gehna_coins) }} coins</strong>
+                            <small>Worth Rs {{ number_format((int) auth()->user()->gehna_coins * (float) ($appSetting?->gehna_coin_value ?? 1), 2) }}</small>
+                        </div>
                         <form action="{{ route('logout') }}" method="POST">
                             @csrf
                             <button type="submit">Logout</button>

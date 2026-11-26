@@ -87,9 +87,20 @@
                                     $inputStyle = "border:1.5px solid #DEE2E6; border-radius:8px; padding:11px 16px; font-size:0.93rem; background:#f9f9f9; width:100%; outline:none; transition:border-color 0.3s;";
                                     $focusAttr = "onfocus=\"this.style.borderColor='#017075'; this.style.background='#fff';\" onblur=\"this.style.borderColor='#DEE2E6'; this.style.background='#f9f9f9';\"";
                                     @endphp
+                                    @if($savedAddresses->isNotEmpty())
+                                        <div class="col-12">
+                                            <label for="saved_address_id" style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">Use a saved address</label>
+                                            <select id="saved_address_id" name="saved_address_id" style="{{ $inputStyle }}">
+                                                <option value="">Enter a different address</option>
+                                                @foreach($savedAddresses as $savedAddress)
+                                                    <option value="{{ $savedAddress->id }}" @selected((string) old('saved_address_id', $primaryAddress?->id) === (string) $savedAddress->id) data-name="{{ $savedAddress->recipient_name }}" data-phone="{{ $savedAddress->phone }}" data-line1="{{ $savedAddress->line1 }}" data-line2="{{ $savedAddress->line2 }}" data-city="{{ $savedAddress->city }}" data-state="{{ $savedAddress->state }}" data-zip="{{ $savedAddress->postal_code }}" data-country="{{ $savedAddress->country }}">{{ $savedAddress->label }}{{ $savedAddress->is_primary ? ' (Primary)' : '' }} — {{ $savedAddress->line1 }}, {{ $savedAddress->city }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    @endif
                                     <div class="col-md-6">
                                         <label style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">Full Name</label>
-                                        <input type="text" name="billing_name" value="{{ old('billing_name', $user->name) }}" placeholder="Full Name" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
+                                        <input type="text" name="billing_name" value="{{ old('billing_name', $primaryAddress?->recipient_name ?? $user->name) }}" placeholder="Full Name" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
                                     </div>
                                     <div class="col-md-6">
                                         <label style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">Email</label>
@@ -97,27 +108,27 @@
                                     </div>
                                     <div class="col-md-6">
                                         <label style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">Phone</label>
-                                        <input type="text" name="billing_phone" value="{{ old('billing_phone') }}" placeholder="Phone" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
+                                        <input type="text" name="billing_phone" value="{{ old('billing_phone', $primaryAddress?->phone ?? $user->phone) }}" placeholder="Phone" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
                                     </div>
                                     <div class="col-md-6">
                                         <label style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">Address Line</label>
-                                        <input type="text" name="billing_line1" value="{{ old('billing_line1') }}" placeholder="Address Line" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
+                                        <input type="text" name="billing_line1" value="{{ old('billing_line1', $primaryAddress ? trim($primaryAddress->line1.($primaryAddress->line2 ? ', '.$primaryAddress->line2 : '')) : '') }}" placeholder="Address Line" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
                                     </div>
                                     <div class="col-md-6">
                                         <label style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">City</label>
-                                        <input type="text" name="billing_city" value="{{ old('billing_city') }}" placeholder="City" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
+                                        <input type="text" name="billing_city" value="{{ old('billing_city', $primaryAddress?->city) }}" placeholder="City" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
                                     </div>
                                     <div class="col-md-6">
                                         <label style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">State</label>
-                                        <input type="text" name="billing_state" value="{{ old('billing_state') }}" placeholder="State" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
+                                        <input type="text" name="billing_state" value="{{ old('billing_state', $primaryAddress?->state) }}" placeholder="State" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
                                     </div>
                                     <div class="col-md-6">
                                         <label style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">ZIP Code</label>
-                                        <input type="text" name="billing_zip" value="{{ old('billing_zip') }}" placeholder="ZIP Code" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
+                                        <input type="text" name="billing_zip" value="{{ old('billing_zip', $primaryAddress?->postal_code) }}" placeholder="ZIP Code" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
                                     </div>
                                     <div class="col-md-6">
                                         <label style="font-size:0.73rem; text-transform:uppercase; letter-spacing:1.5px; font-weight:700; color:#6C757D;" class="form-label">Country</label>
-                                        <input type="text" name="billing_country" value="{{ old('billing_country', 'India') }}" placeholder="Country" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
+                                        <input type="text" name="billing_country" value="{{ old('billing_country', $primaryAddress?->country ?? 'India') }}" placeholder="Country" style="{{ $inputStyle }}" {!! $focusAttr !!} required>
                                     </div>
                                 </div>
                             </div>
@@ -340,6 +351,8 @@
                                                                 Rs {{ number_format($couponItem['amount'], 2) }} OFF
                                                             @elseif($couponItem['type'] === 'buy_get')
                                                                 Buy {{ $couponItem['buy_quantity'] }}, Get {{ $couponItem['get_quantity'] }} Free
+                                                            @elseif($couponItem['type'] === 'birthday')
+                                                                Birthday offer: {{ $couponItem['birthday_discount_type'] === 'fixed' ? 'Rs '.number_format($couponItem['amount'], 2).' OFF' : rtrim(rtrim(number_format($couponItem['amount'], 2), '0'), '.').'% OFF' }}
                                                             @else
                                                                 {{ number_format($couponItem['reward_coins']) }} Gehna Coins
                                                             @endif
@@ -376,12 +389,12 @@
                         </div> --}}
 
                         {{-- Gehna Coins Redemption --}}
-                        {{-- <div style="margin-bottom:20px; padding:16px 18px; border:1.5px dashed #017075; border-radius:10px; background:#F2FAFA;">
+                        <div style="margin-bottom:20px; padding:16px 18px; border:1.5px dashed #017075; border-radius:10px; background:#F2FAFA;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px; flex-wrap:wrap;">
                                 <span style="color:#017075; font-weight:800; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px;">
                                     <i class="bi bi-coin me-1"></i> Gehna Coins
                                 </span>
-                                <span style="color:#495057; font-size:0.8rem; font-weight:600;">Balance: {{ (int) ($coinsBalance ?? 0) }} coins <span style="color:#6C757D;">(1 coin = Rs 1)</span></span>
+                                <span style="color:#495057; font-size:0.8rem; font-weight:600;">Balance: {{ (int) ($coinsBalance ?? 0) }} coins <span style="color:#6C757D;">(1 coin = Rs {{ number_format((float) ($coinValue ?? 1), 2) }})</span></span>
                             </div>
                             @if(!empty($appliedCoins) && (int) ($appliedCoins['coins'] ?? 0) > 0)
                                 <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -393,17 +406,19 @@
                                         <button type="submit" style="padding:6px 12px; border-radius:7px; border:1px solid #DC3545; background:#fff; color:#DC3545; font-size:0.75rem; font-weight:700; cursor:pointer;">Remove</button>
                                     </form>
                                 </div>
-                            @elseif((int) ($coinsBalance ?? 0) > 0)
+                            @elseif((int) ($appliedCoins['max_usable'] ?? $coinsBalance ?? 0) > 0)
                                 <form action="{{ route('checkout.coins.apply') }}" method="POST" style="display:flex; gap:8px; flex-wrap:wrap;">
                                     @csrf
-                                    <input type="number" name="coins" min="1" max="{{ (int) $coinsBalance }}" value="{{ old('coins', (int) ($appliedCoins['requested'] ?? 0) > 0 ? (int) $appliedCoins['requested'] : '') }}"
+                                    <input type="number" name="coins" min="1" max="{{ (int) ($appliedCoins['max_usable'] ?? $coinsBalance) }}" value="{{ old('coins', (int) ($appliedCoins['requested'] ?? 0) > 0 ? (int) $appliedCoins['requested'] : '') }}"
                                            placeholder="Enter coins to use" style="flex:1 1 120px; padding:10px 14px; border-radius:8px; border:1.5px solid #DEE2E6; font-size:0.9rem;">
                                     <button type="submit" style="padding:10px 18px; border-radius:8px; border:none; background:linear-gradient(95deg, #017075 0%, #00595D 101.11%); color:#fff; font-size:0.8rem; font-weight:800; cursor:pointer;">Redeem</button>
                                 </form>
+                            @elseif((int) ($coinsBalance ?? 0) > 0)
+                                <span style="color:#6C757D; font-size:0.85rem;">Your current order total is too low to redeem one coin (worth Rs {{ number_format((float) ($coinValue ?? 1), 2) }}).</span>
                             @else
                                 <span style="color:#6C757D; font-size:0.85rem;">Earn Gehna Coins with eligible coupons and redeem them on your next payment.</span>
                             @endif
-                        </div> --}}
+                        </div>
 
                         {{-- Totals --}}
                         <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -498,9 +513,26 @@
     const shippingCheckbox = document.getElementById('shipping_same_as_billing');
     const shippingFields = document.getElementById('shipping-fields');
     const shippingNotice = document.getElementById('shipping-same-notice');
+    const savedAddressSelect = document.getElementById('saved_address_id');
     const submitButton = document.getElementById('place-order-btn');
     const processingOverlay = document.getElementById('checkout-processing-overlay');
     let paymentAttemptStarted = false;
+
+    if (savedAddressSelect) {
+        const billingFields = {
+            billing_name: 'name', billing_phone: 'phone', billing_line1: 'line1',
+            billing_city: 'city', billing_state: 'state', billing_zip: 'zip', billing_country: 'country'
+        };
+        const setAddress = (option) => {
+            if (!option || !option.value) return;
+            Object.entries(billingFields).forEach(([field, key]) => {
+                const input = form.elements.namedItem(field);
+                if (input) input.value = option.dataset[key] || '';
+            });
+        };
+        savedAddressSelect.addEventListener('change', () => setAddress(savedAddressSelect.selectedOptions[0]));
+        if (savedAddressSelect.value) setAddress(savedAddressSelect.selectedOptions[0]);
+    }
 
     const showProcessing = (message) => {
         if (processingOverlay) {

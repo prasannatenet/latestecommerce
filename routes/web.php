@@ -283,7 +283,14 @@ Route::post('/webhooks/razorpay', [FrontendCheckoutController::class, 'razorpayW
     Route::middleware('auth')->prefix('account')->name('account.')->group(function () {
         Route::get('/', [FrontendAccountController::class, 'index'])->name('index');
         Route::get('/profile', [FrontendAccountController::class, 'index'])->name('profile');
-        Route::get('/orders', [FrontendAccountController::class, 'index'])->name('orders');
+        Route::put('/profile', [FrontendAccountController::class, 'updateProfile'])->name('profile.update');
+        Route::get('/addresses', [FrontendAccountController::class, 'addresses'])->name('addresses');
+        Route::post('/addresses', [FrontendAccountController::class, 'storeAddress'])->name('addresses.store');
+        Route::put('/addresses/{address}', [FrontendAccountController::class, 'updateAddress'])->name('addresses.update');
+        Route::delete('/addresses/{address}', [FrontendAccountController::class, 'deleteAddress'])->name('addresses.destroy');
+        Route::patch('/addresses/{address}/primary', [FrontendAccountController::class, 'setPrimaryAddress'])->name('addresses.primary');
+        Route::get('/orders', [FrontendAccountController::class, 'orders'])->name('orders');
+        Route::get('/wishlist', [FrontendAccountController::class, 'wishlist'])->name('wishlist');
     });
 
     Route::middleware(['auth'])->group(function(){
@@ -303,6 +310,9 @@ Route::prefix('admin')->middleware(['auth','admin'])->name('admin.')->group(func
     Route::get('/', DashboardController::class . '@index')->name('dashboard');
     Route::get('dashboard/sales', [DashboardController::class, 'sales'])->name('dashboard.sales');
 
+    Route::get('products/recommendation-options', [BackendProductController::class, 'recommendationProducts'])
+        ->where('product', 'recommendation-options')
+        ->name('products.recommendation-options');
     Route::resource('products', BackendProductController::class);
     Route::get('reviews', [BackendReviewController::class, 'index'])->name('reviews.index');
     Route::delete('products/{product}/images/{image}', [BackendProductController::class, 'destroyImage'])->name('products.images.destroy');

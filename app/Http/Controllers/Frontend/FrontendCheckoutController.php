@@ -15,6 +15,7 @@ use App\Models\PaymentProvider;
 use App\Models\PaymentTransaction;
 use App\Models\Setting;
 use App\Models\User;
+use App\Models\UserAddress;
 use App\Services\ComboService;
 use App\Services\CouponService;
 use App\Services\OrderInventoryService;
@@ -75,7 +76,15 @@ class FrontendCheckoutController extends Controller
             ->limit(8)
             ->get()
             ->map(function (Coupon $coupon) use ($subtotal, $hasAppliedCombo) {
-                $reason = $this->getCouponIneligibilityReason($coupon, (float) $subtotal, $hasAppliedCombo);
+                $user = Auth::user();
+                $reason = $this->couponService->ineligibilityReason(
+                    $coupon,
+                    (float) $subtotal,
+                    $hasAppliedCombo,
+                    $user?->id,
+                    session('checkout_coupon.email', $user?->email),
+                    session('checkout_coupon.phone', $user?->phone),
+                );
                 $validityParts = [];
 
                 if ($coupon->starts_at) {
@@ -89,6 +98,7 @@ class FrontendCheckoutController extends Controller
                     'code' => $coupon->code,
                     'type' => $coupon->type,
                     'amount' => (float) $coupon->amount,
+                    'birthday_discount_type' => $coupon->birthday_discount_type,
                     'buy_quantity' => (int) ($coupon->buy_quantity ?? 0),
                     'get_quantity' => (int) ($coupon->get_quantity ?? 0),
                     'reward_coins' => (int) ($coupon->reward_coins ?? 0),
@@ -119,6 +129,9 @@ class FrontendCheckoutController extends Controller
             ->get()
             ->keyBy('slug');
 
+        $savedAddresses = Auth::user()->addresses()->orderByDesc('is_primary')->orderBy('id')->get();
+        $primaryAddress = $savedAddresses->firstWhere('is_primary', true) ?? $savedAddresses->first();
+
         return view('frontend.checkout.index', [
             'cartItems' => $cartItems,
             'subtotal' => $subtotal,
@@ -132,11 +145,14 @@ class FrontendCheckoutController extends Controller
             'appliedCoupon' => $appliedCoupon,
             'appliedCoins' => $appliedCoins,
             'coinsBalance' => $coinsBalance,
+            'coinValue' => Setting::gehnaCoinValue(),
             'availableCoupons' => $availableCoupons,
             'codProvider' => $providers->get('cod'),
             'razorpayProvider' => $providers->get('razorpay'),
             'user' => Auth::user(),
             'checkoutToken' => $checkoutToken,
+            'savedAddresses' => $savedAddresses,
+            'primaryAddress' => $primaryAddress,
         ]);
     }
 
@@ -164,7 +180,17 @@ class FrontendCheckoutController extends Controller
             return back()->with('error', 'Coupon code not found.');
         }
 
-        $ineligibilityReason = $this->getCouponIneligibilityReason($coupon, $subtotal, $hasAppliedCombo);
+        $user = Auth::user();
+        $email = $request->input('billing_email', $user?->email);
+        $phone = $request->input('billing_phone', $user?->phone);
+        $ineligibilityReason = $this->couponService->ineligibilityReason(
+            $coupon,
+            $subtotal,
+            $hasAppliedCombo,
+            $user?->id,
+            $email,
+            $phone,
+        );
         if ($ineligibilityReason !== null) {
             return back()->with('error', $ineligibilityReason);
         }
@@ -172,6 +198,8 @@ class FrontendCheckoutController extends Controller
         session([
             'checkout_coupon' => [
                 'code' => $coupon->code,
+                'email' => $email,
+                'phone' => $phone,
             ],
         ]);
 
@@ -208,7 +236,8 @@ class FrontendCheckoutController extends Controller
         $shippingCharge = Setting::shippingChargeFor((float) $subtotal);
         $orderTotal = max(0, $subtotal - $comboDiscount - $discount) + $shippingCharge;
 
-        $maxUsable = max(0, min($balance, (int) floor($orderTotal)));
+        $coinValue = Setting::gehnaCoinValue();
+        $maxUsable = max(0, min($balance, (int) floor(Order::roundAmount($orderTotal) / $coinValue)));
         if ($maxUsable < 1) {
             return back()->with('error', 'Gehna Coins cannot be applied to this order right now.');
         }
@@ -222,7 +251,7 @@ class FrontendCheckoutController extends Controller
             return back()->with('success', 'Gehna Coins applied: '.$used.' coins (limited by your coin balance and order total).');
         }
 
-        return back()->with('success', 'Gehna Coins applied: '.$used.' coins = Rs '.number_format((float) $used, 2).' off your order.');
+        return back()->with('success', 'Gehna Coins applied: '.$used.' coins = Rs '.number_format(Setting::coinsToMoney($used), 2).' off your order.');
     }
 
     public function removeCoins(): RedirectResponse
@@ -237,6 +266,7 @@ class FrontendCheckoutController extends Controller
         $data = $request->validate([
             'payment_method' => 'required|in:cod,razorpay',
             'checkout_token' => 'nullable|uuid',
+            'saved_address_id' => 'nullable|integer|exists:user_addresses,id',
             'billing_name' => 'required|string|max:100',
             'billing_email' => 'required|email|max:100',
             'billing_phone' => 'required|string|max:20',
@@ -254,6 +284,19 @@ class FrontendCheckoutController extends Controller
             'shipping_zip' => 'nullable|string|max:20',
             'shipping_country' => 'nullable|string|max:100',
         ]);
+
+        if (! empty($data['saved_address_id'])) {
+            $savedAddress = Auth::user()->addresses()->whereKey($data['saved_address_id'])->firstOrFail();
+            $data = array_merge($data, [
+                'billing_name' => $savedAddress->recipient_name,
+                'billing_phone' => $savedAddress->phone ?: ($data['billing_phone'] ?? Auth::user()->phone),
+                'billing_line1' => trim($savedAddress->line1.($savedAddress->line2 ? ', '.$savedAddress->line2 : '')),
+                'billing_city' => $savedAddress->city,
+                'billing_state' => $savedAddress->state,
+                'billing_zip' => $savedAddress->postal_code,
+                'billing_country' => $savedAddress->country,
+            ]);
+        }
 
         $checkoutToken = (string) ($data['checkout_token'] ?? session('checkout_token', ''));
         if ($checkoutToken === '') {
@@ -304,7 +347,12 @@ class FrontendCheckoutController extends Controller
         $subtotal = (float) $cartItems->sum(fn ($item) => $item->quantity * (float) $item->price);
         $comboSummary = $this->comboService->summarize($cartItems);
         $hasAppliedCombo = $this->comboService->hasAppliedCombo($cartItems, $comboSummary);
-        $appliedCoupon = $this->getAppliedCouponSummary($cartItems, $hasAppliedCombo);
+        $appliedCoupon = $this->getAppliedCouponSummary(
+            $cartItems,
+            $hasAppliedCombo,
+            $data['billing_email'],
+            $data['billing_phone'],
+        );
         $discount = (float) ($appliedCoupon['discount'] ?? 0);
         $comboDiscount = (float) ($comboSummary['discount'] ?? 0);
 
@@ -312,7 +360,7 @@ class FrontendCheckoutController extends Controller
         $orderTotal = max(0, $subtotal - $comboDiscount - $discount) + $shippingCharge;
         $appliedCoins = $this->getAppliedCoinsSummary($orderTotal);
         $coinsUsed = (int) ($appliedCoins['coins'] ?? 0);
-        $coinsDiscount = (float) $coinsUsed;
+        $coinsDiscount = (float) ($appliedCoins['discount'] ?? 0);
         // Round the final amount, after coins. This same value is stored on the
         // order, shown on the page and sent to the gateway, so the customer is
         // never quoted a fraction they are not charged.
@@ -356,6 +404,16 @@ class FrontendCheckoutController extends Controller
                     throw ValidationException::withMessages([
                         'coins' => 'You do not have enough Gehna Coins to complete this order.',
                     ]);
+                }
+
+                if ($appliedCoupon) {
+                    $coupon = Coupon::find($appliedCoupon['id']);
+                    $couponError = $coupon
+                        ? $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, Auth::id(), $billingAddress['email'], $billingAddress['phone'])
+                        : 'This coupon is no longer available.';
+                    if ($couponError !== null) {
+                        throw ValidationException::withMessages(['coupon_code' => $couponError]);
+                    }
                 }
 
                 $order = Order::create([
@@ -421,6 +479,7 @@ class FrontendCheckoutController extends Controller
                             [
                                 'coupon_id' => $appliedCoupon['id'],
                                 'user_id' => Auth::id(),
+                                'redemption_year' => ($appliedCoupon['type'] ?? '') === 'birthday' ? now()->year : 0,
                             ],
                             ['order_id' => $order->id],
                         );
@@ -708,7 +767,7 @@ class FrontendCheckoutController extends Controller
             ], 422);
         }
 
-        $this->markOrderPaymentCaptured(
+        $captured = $this->markOrderPaymentCaptured(
             $order,
             $data['razorpay_order_id'],
             $data['razorpay_payment_id'],
@@ -718,6 +777,14 @@ class FrontendCheckoutController extends Controller
 
         Cart::where('user_id', Auth::id())->delete();
         session()->forget(['checkout_coupon', 'checkout_coins', 'checkout_token']);
+
+        $order->refresh();
+        if (! $captured && $order->payment_status !== 'paid') {
+            return response()->json([
+                'message' => 'Your payment was received and is being confirmed. Please do not pay again.',
+                'redirect_url' => route('checkout.payment-status', $order),
+            ]);
+        }
 
         return response()->json([
             'message' => 'Payment verified successfully.',
@@ -871,6 +938,18 @@ class FrontendCheckoutController extends Controller
             }
 
             $this->inventoryService->deductForOrder($lockedOrder);
+
+            $rewardPercent = (float) (Setting::query()->value('gehna_coin_reward_percent') ?? 10);
+            // Earned coins use the customer's final order value. Coin conversion
+            // value (gehna_coin_value) is only used later when redeeming coins.
+            $rewardCoins = (int) floor(max(0, (float) $lockedOrder->total) * $rewardPercent / 100);
+            if ($rewardCoins > 0 && $lockedOrder->user_id) {
+                User::whereKey($lockedOrder->user_id)->increment('gehna_coins', $rewardCoins);
+                $meta = $lockedOrder->payment_meta ?? [];
+                $meta['pricing']['order_reward_coins'] = $rewardCoins;
+                $meta['pricing']['order_reward_percent'] = $rewardPercent;
+                $lockedOrder->update(['payment_meta' => $meta]);
+            }
 
             return true;
         });
@@ -1053,7 +1132,7 @@ class FrontendCheckoutController extends Controller
         ]);
     }
 
-    private function getAppliedCouponSummary($cartItems, ?bool $hasAppliedCombo = null): ?array
+    private function getAppliedCouponSummary($cartItems, ?bool $hasAppliedCombo = null, ?string $email = null, ?string $phone = null): ?array
     {
         $hasAppliedCombo ??= $this->comboService->hasAppliedCombo($cartItems);
         $stored = session('checkout_coupon');
@@ -1070,7 +1149,18 @@ class FrontendCheckoutController extends Controller
         }
 
         $coupon = Coupon::whereRaw('UPPER(TRIM(code)) = ?', [$code])->first();
-        if (! $coupon || ! $this->isCouponApplicable($coupon, (float) collect($cartItems)->sum(fn ($item) => (int) $item->quantity * (float) $item->price), $hasAppliedCombo)) {
+        $user = Auth::user();
+        $email ??= session('checkout_coupon.email', $user?->email);
+        $phone ??= session('checkout_coupon.phone', $user?->phone);
+        $reason = $coupon ? $this->couponService->ineligibilityReason(
+            $coupon,
+            (float) collect($cartItems)->sum(fn ($item) => (int) $item->quantity * (float) $item->price),
+            $hasAppliedCombo,
+            $user?->id,
+            $email,
+            $phone,
+        ) : 'Coupon not found.';
+        if (! $coupon || $reason !== null) {
             session()->forget('checkout_coupon');
 
             return null;
@@ -1083,6 +1173,7 @@ class FrontendCheckoutController extends Controller
             'code' => $coupon->code,
             'type' => $coupon->type,
             'amount' => (float) $coupon->amount,
+            'birthday_discount_type' => $coupon->birthday_discount_type,
             'buy_quantity' => (int) ($coupon->buy_quantity ?? 0),
             'get_quantity' => (int) ($coupon->get_quantity ?? 0),
             'reward_coins' => (int) ($coupon->reward_coins ?? 0),
@@ -1095,20 +1186,26 @@ class FrontendCheckoutController extends Controller
     {
         $balance = (int) (Auth::user()->gehna_coins ?? 0);
         $requested = (int) (session('checkout_coins.coins') ?? 0);
-        $coins = max(0, min($requested, $balance, (int) floor(max(0.0, $orderTotal))));
+        $coinValue = Setting::gehnaCoinValue();
+        $maxCoinsForOrder = (int) floor(max(0.0, Order::roundAmount($orderTotal)) / $coinValue);
+        $coins = max(0, min($requested, $balance, $maxCoinsForOrder));
+        $discount = min($orderTotal, Setting::coinsToMoney($coins));
 
         return [
             'requested' => $requested,
             'coins' => $coins,
-            'discount' => (float) $coins,
+            'discount' => $discount,
+            'coin_value' => $coinValue,
+            'max_usable' => min($balance, $maxCoinsForOrder),
             'balance' => $balance,
             'balance_after' => max(0, $balance - $coins),
         ];
     }
 
-    private function isCouponApplicable(Coupon $coupon, float $subtotal, bool $hasAppliedCombo = false): bool
+    private function isCouponApplicable(Coupon $coupon, float $subtotal, bool $hasAppliedCombo = false, ?string $email = null, ?string $phone = null): bool
     {
-        return $this->getCouponIneligibilityReason($coupon, $subtotal, $hasAppliedCombo) === null;
+        $user = Auth::user();
+        return $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, $user?->id, $email ?? $user?->email, $phone ?? $user?->phone) === null;
     }
 
     private function getCouponIneligibilityReason(Coupon $coupon, float $subtotal, bool $hasAppliedCombo = false): ?string

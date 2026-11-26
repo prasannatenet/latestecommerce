@@ -2,82 +2,62 @@
 
 @section('title', 'My Account')
 
+@section('styles')
+    <link rel="stylesheet" href="{{ asset('frontend/css/storefront-category.min.css') }}">
+@endsection
+
 @section('content')
-    <main class="account-page">
+    @php
+        $nameParts = preg_split('/\s+/', trim($user->name), 2) ?: [];
+        $firstName = old('first_name', $nameParts[0] ?? '');
+        $lastName = old('last_name', $nameParts[1] ?? '');
+    @endphp
+    <main class="account-page account-profile-page">
+        <header class="account-title-banner">
+            <h1>My Account</h1>
+            <p><a href="{{ route('home') }}">Home</a><span>/</span>My Account</p>
+        </header>
         <div class="account-container">
-            <header class="account-page-header">
-                <p class="account-eyebrow">MY ACCOUNT</p>
-                <h1>Welcome, {{ $user->name }}</h1>
-                <p>Manage your profile and keep track of your orders.</p>
-            </header>
-
-            <section class="account-profile" aria-labelledby="account-profile-title">
-                <div>
-                    <p class="account-eyebrow">PERSONAL DETAILS</p>
-                    <h2 id="account-profile-title">Your Profile</h2>
-                </div>
-                <dl>
-                    <div>
-                        <dt>Name</dt>
-                        <dd>{{ $user->name }}</dd>
+            <div class="account-layout">
+                @include('account.partials.sidebar', ['activeAccountPage' => 'profile'])
+                <section class="account-main-panel" aria-labelledby="account-profile-title">
+                    <div class="account-profile-avatar-wrap">
+                        @if ($user->profile_picture)
+                            <img class="account-profile-picture" src="{{ asset('storage/' . $user->profile_picture) }}" alt="Profile picture">
+                        @else
+                            <span class="account-profile-picture account-profile-initial" aria-hidden="true">{{ mb_strtoupper(mb_substr($user->name, 0, 1)) }}</span>
+                        @endif
+                        <label class="account-avatar-upload" title="Change profile picture">
+                            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            <input type="file" name="profile_picture" accept="image/*" form="account-profile-form" aria-label="Choose profile picture">
+                        </label>
                     </div>
-                    <div>
-                        <dt>Email</dt>
-                        <dd>{{ $user->email }}</dd>
-                    </div>
-                    <div>
-                        <dt>Phone</dt>
-                        <dd>{{ $user->phone ?: 'Not provided' }}</dd>
-                    </div>
-                </dl>
-            </section>
-
-            <section class="account-orders" id="order-history" aria-labelledby="order-history-title">
-                <div class="account-orders-header">
-                    <div>
-                        <p class="account-eyebrow">YOUR PURCHASES</p>
-                        <h2 id="order-history-title">Order History</h2>
-                    </div>
-                    <span>{{ $orders->total() }} {{ \Illuminate\Support\Str::plural('order', $orders->total()) }}</span>
-                </div>
-
-                @forelse ($orders as $order)
-                    <article class="account-order">
-                        <header class="account-order-header">
-                            <div>
-                                <h3>Order #{{ $order->id }}</h3>
-                                <p>Placed {{ $order->created_at->format('M j, Y') }}</p>
+                    <h2 id="account-profile-title" class="visually-hidden">Personal Information</h2>
+                    @if (session('success'))<p class="account-feedback" role="status">{{ session('success') }}</p>@endif
+                    <form id="account-profile-form" class="account-form account-personal-form" method="post" action="{{ route('account.profile.update') }}" enctype="multipart/form-data">
+                        @csrf
+                        @method('put')
+                        <label>First Name <span>*</span><input type="text" name="first_name" value="{{ $firstName }}" required autocomplete="given-name"></label>
+                        <label>Last Name <span>*</span><input type="text" name="last_name" value="{{ $lastName }}" required autocomplete="family-name"></label>
+                        <label class="account-form-wide">Email <span>*</span><input type="email" value="{{ $user->email }}" readonly autocomplete="email"></label>
+                        <label class="account-form-wide">Phone <span>*</span><input type="tel" name="phone" value="{{ old('phone', $user->phone) }}" autocomplete="tel"></label>
+                        <label class="account-form-wide">Date of birth<input type="date" name="date_of_birth" value="{{ old('date_of_birth', optional($user->date_of_birth)->format('Y-m-d')) }}" max="{{ now()->subDay()->toDateString() }}" autocomplete="bday"></label>
+                        @if ($user->profile_picture)
+                            <label class="account-check account-form-wide"><input type="checkbox" name="remove_profile_picture" value="1"> Remove profile picture</label>
+                        @endif
+                        @if ($errors->any())
+                            <div class="account-errors account-form-wide" role="alert">
+                                @foreach ($errors->all() as $error)<p>{{ $error }}</p>@endforeach
                             </div>
-                            <span class="account-order-status">{{ ucfirst($order->status) }}</span>
-                        </header>
-
-                        <ul class="account-order-items">
-                            @foreach ($order->items as $item)
-                                <li>
-                                    <span>{{ $item->product_name }} <span class="account-item-quantity">× {{ $item->quantity }}</span></span>
-                                    <span>₹{{ number_format((float) $item->line_total, 2) }}</span>
-                                </li>
-                            @endforeach
-                        </ul>
-
-                        <footer class="account-order-total">
-                            <span>Total</span>
-                            <strong>₹{{ number_format((float) $order->total, 2) }}</strong>
-                        </footer>
-                    </article>
-                @empty
-                    <div class="account-orders-empty">
-                        <h3>No orders yet</h3>
-                        <p>Your orders will appear here after you make a purchase.</p>
-                        <a href="{{ route('storefront.products') }}">Explore jewellery</a>
-                    </div>
-                @endforelse
-
-                @if ($orders->hasPages())
-                    <nav class="account-pagination" aria-label="Order history pages">
-                        {{ $orders->links() }}
-                    </nav>
-                @endif
+                        @endif
+                        <div class="account-form-actions account-form-wide"><button type="submit" class="account-button">Update Changes</button></div>
+                    </form>
+                </section>
+            </div>
+            <section class="account-benefits" aria-label="Shopping benefits">
+                <div><span class="material-symbols-outlined" aria-hidden="true">local_shipping</span><p><strong>Free Shipping</strong><small>Free shipping on eligible orders</small></p></div>
+                <div><span class="material-symbols-outlined" aria-hidden="true">payments</span><p><strong>Flexible Payment</strong><small>Multiple secure payment options</small></p></div>
+                <div><span class="material-symbols-outlined" aria-hidden="true">headset_mic</span><p><strong>24×7 Support</strong><small>We support you every day</small></p></div>
             </section>
         </div>
     </main>

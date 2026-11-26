@@ -91,14 +91,14 @@ class CheckoutService
      *     total: float
      * }
      */
-    public function quote(User $user, $cartItems, ?string $couponCode = null, int $coinsRequested = 0): array
+    public function quote(User $user, $cartItems, ?string $couponCode = null, int $coinsRequested = 0, ?string $email = null, ?string $phone = null): array
     {
         $cartItems = collect($cartItems);
 
         $subtotal = (float) $cartItems->sum(fn ($item) => (int) $item->quantity * (float) $item->price);
         $comboSummary = $this->comboService->summarize($cartItems);
         $hasAppliedCombo = $this->comboService->hasAppliedCombo($cartItems, $comboSummary);
-        $appliedCoupon = $this->resolveCoupon($couponCode, $cartItems, $subtotal, $hasAppliedCombo);
+        $appliedCoupon = $this->resolveCoupon($couponCode, $cartItems, $subtotal, $hasAppliedCombo, $user, $email, $phone);
 
         $discount = (float) ($appliedCoupon['discount'] ?? 0);
         $comboDiscount = (float) ($comboSummary['discount'] ?? 0);
@@ -112,7 +112,10 @@ class CheckoutService
         // Coins are clamped to the balance and to the payable amount, so a
         // stale request can never drive the total negative.
         $balance = (int) ($user->gehna_coins ?? 0);
-        $coinsUsed = max(0, min($coinsRequested, $balance, (int) floor(max(0.0, $orderTotal))));
+        $coinValue = Setting::gehnaCoinValue();
+        $maxCoinsForOrder = (int) floor(max(0.0, Order::roundAmount($orderTotal)) / $coinValue);
+        $coinsUsed = max(0, min($coinsRequested, $balance, $maxCoinsForOrder));
+        $coinsDiscount = min($orderTotal, Setting::coinsToMoney($coinsUsed));
 
         return [
             'cart' => $cartItems,
@@ -121,20 +124,22 @@ class CheckoutService
             'has_applied_combo' => $hasAppliedCombo,
             'combo_discount' => $comboDiscount,
             'coupon' => $appliedCoupon,
-            'coupon_error' => $this->couponErrorMessage($couponCode, $appliedCoupon, $subtotal, $hasAppliedCombo),
+            'coupon_error' => $this->couponErrorMessage($couponCode, $appliedCoupon, $subtotal, $hasAppliedCombo, $user, $email, $phone),
             'discount' => $discount,
             'shipping_charge' => $shippingCharge,
             'coins' => [
                 'requested' => $coinsRequested,
                 'used' => $coinsUsed,
-                'discount' => (float) $coinsUsed,
+                'discount' => $coinsDiscount,
+                'coin_value' => $coinValue,
+                'max_usable' => min($balance, $maxCoinsForOrder),
                 'balance' => $balance,
                 'balance_after' => max(0, $balance - $coinsUsed),
             ],
             // Round the final amount, after coins. This same value is stored
             // on the order, shown on the page and sent to the gateway, so the
             // customer is never quoted a fraction they are not charged.
-            'total' => Order::roundAmount($orderTotal - $coinsUsed),
+            'total' => Order::roundAmount($orderTotal - $coinsDiscount),
         ];
     }
 
@@ -146,7 +151,7 @@ class CheckoutService
      *
      * @param  Collection<int, Cart>|array  $cartItems
      */
-    public function resolveCoupon(?string $couponCode, $cartItems, float $subtotal, bool $hasAppliedCombo): ?array
+    public function resolveCoupon(?string $couponCode, $cartItems, float $subtotal, bool $hasAppliedCombo, ?User $user = null, ?string $email = null, ?string $phone = null): ?array
     {
         $code = strtoupper(trim((string) $couponCode));
 
@@ -156,7 +161,7 @@ class CheckoutService
 
         $coupon = Coupon::whereRaw('UPPER(TRIM(code)) = ?', [$code])->first();
 
-        if (! $coupon || $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo) !== null) {
+        if (! $coupon || $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, $user?->id, $email ?? $user?->email, $phone ?? $user?->phone) !== null) {
             return null;
         }
 
@@ -165,6 +170,7 @@ class CheckoutService
             'code' => $coupon->code,
             'type' => $coupon->type,
             'amount' => (float) $coupon->amount,
+            'birthday_discount_type' => $coupon->birthday_discount_type,
             'buy_quantity' => (int) ($coupon->buy_quantity ?? 0),
             'get_quantity' => (int) ($coupon->get_quantity ?? 0),
             'reward_coins' => (int) ($coupon->reward_coins ?? 0),
@@ -231,6 +237,24 @@ class CheckoutService
         $coinsDiscount = (float) $quote['coins']['discount'];
         $orderTotal = (float) $quote['total'];
 
+        if ($appliedCoupon) {
+            $coupon = Coupon::find($appliedCoupon['id']);
+            $eligibilityError = $coupon
+                ? $this->couponService->ineligibilityReason(
+                    $coupon,
+                    $subtotal,
+                    (bool) $quote['has_applied_combo'],
+                    $user->id,
+                    $billingAddress['email'] ?? $user->email,
+                    $billingAddress['phone'] ?? $user->phone,
+                )
+                : 'This coupon is no longer available.';
+
+            if ($eligibilityError !== null) {
+                throw ValidationException::withMessages(['coupon_code' => $eligibilityError]);
+            }
+        }
+
         try {
             $order = DB::transaction(function () use (
                 $user, $data, $provider, $checkoutToken, $cartItems, $comboSummary,
@@ -245,6 +269,23 @@ class CheckoutService
                     throw ValidationException::withMessages([
                         'coins' => 'You do not have enough Gehna Coins to complete this order.',
                     ]);
+                }
+
+                if ($appliedCoupon) {
+                    $coupon = Coupon::find($appliedCoupon['id']);
+                    $couponError = $coupon
+                        ? $this->couponService->ineligibilityReason(
+                            $coupon,
+                            $subtotal,
+                            false,
+                            $user->id,
+                            $billingAddress['email'] ?? $user->email,
+                            $billingAddress['phone'] ?? $user->phone,
+                        )
+                        : 'This coupon is no longer available.';
+                    if ($couponError !== null) {
+                        throw ValidationException::withMessages(['coupon_code' => $couponError]);
+                    }
                 }
 
                 $order = Order::create([
@@ -309,6 +350,7 @@ class CheckoutService
                         [
                             'coupon_id' => $appliedCoupon['id'],
                             'user_id' => $user->id,
+                            'redemption_year' => ($appliedCoupon['type'] ?? '') === 'birthday' ? now()->year : 0,
                         ],
                         ['order_id' => $order->id],
                     );
@@ -645,7 +687,7 @@ class CheckoutService
     /**
      * Why a requested coupon is not being applied, or null when it is.
      */
-    private function couponErrorMessage(?string $couponCode, ?array $appliedCoupon, float $subtotal, bool $hasAppliedCombo): ?string
+    private function couponErrorMessage(?string $couponCode, ?array $appliedCoupon, float $subtotal, bool $hasAppliedCombo, ?User $user = null, ?string $email = null, ?string $phone = null): ?string
     {
         $code = strtoupper(trim((string) $couponCode));
 
@@ -659,7 +701,7 @@ class CheckoutService
             return 'Coupon code not found.';
         }
 
-        return $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo)
+        return $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, $user?->id, $email ?? $user?->email, $phone ?? $user?->phone)
             ?? 'This coupon cannot be applied to this order.';
     }
 

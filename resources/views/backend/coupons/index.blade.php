@@ -54,6 +54,8 @@
                                     <span class="df-badge df-badge-info">Fixed</span>
                                 @elseif($coupon->type === 'buy_get')
                                     <span class="df-badge df-badge-info">Buy X Get Y</span>
+                                @elseif($coupon->type === 'birthday')
+                                    <span class="df-badge df-badge-info">Birthday Offer</span>
                                 @else
                                     <span class="df-badge df-badge-info">Gehna Coins</span>
                                 @endif
@@ -66,6 +68,8 @@
                                         ₹{{ number_format($coupon->amount, 2) }}
                                     @elseif($coupon->type === 'buy_get')
                                         Buy {{ $coupon->buy_quantity }}, Get {{ $coupon->get_quantity }}
+                                    @elseif($coupon->type === 'birthday')
+                                        {{ $coupon->birthday_discount_type === 'fixed' ? '₹'.number_format($coupon->amount, 2).' off' : rtrim(rtrim(number_format($coupon->amount, 2), '0'), '.').'%' }} birthday offer
                                     @else
                                         {{ number_format($coupon->reward_coins) }} coins
                                     @endif

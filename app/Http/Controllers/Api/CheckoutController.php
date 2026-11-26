@@ -82,8 +82,8 @@ class CheckoutController extends ApiController
             ->orderByDesc('id')
             ->limit(10)
             ->get()
-            ->map(function (Coupon $coupon) use ($subtotal, $hasAppliedCombo) {
-                $reason = $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo);
+            ->map(function (Coupon $coupon) use ($subtotal, $hasAppliedCombo, $user) {
+                $reason = $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, $user->id, $user->email, $user->phone);
                 $validityParts = [];
                 if ($coupon->starts_at) {
                     $validityParts[] = 'From '.$coupon->starts_at->format('d M Y, h:i A');
@@ -97,6 +97,7 @@ class CheckoutController extends ApiController
                     'code' => $coupon->code,
                     'type' => $coupon->type,
                     'amount' => (float) $coupon->amount,
+                    'birthday_discount_type' => $coupon->birthday_discount_type,
                     'buy_quantity' => (int) ($coupon->buy_quantity ?? 0),
                     'get_quantity' => (int) ($coupon->get_quantity ?? 0),
                     'reward_coins' => (int) ($coupon->reward_coins ?? 0),
@@ -135,6 +136,8 @@ class CheckoutController extends ApiController
             'user_coins' => [
                 'balance' => $coinsBalance,
                 'balance_after' => max(0, $coinsBalance - (int) ($appliedCoins['coins'] ?? 0)),
+                'coin_value' => (float) ($appliedCoins['coin_value'] ?? Setting::gehnaCoinValue()),
+                'value' => Setting::coinsToMoney($coinsBalance),
             ],
             'available_coupons' => $availableCoupons,
             'payment_providers' => [
@@ -183,7 +186,7 @@ class CheckoutController extends ApiController
             return $this->fail('Coupon code not found.', Response::HTTP_NOT_FOUND);
         }
 
-        $ineligibilityReason = $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo);
+        $ineligibilityReason = $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, $user->id, $user->email, $user->phone);
         if ($ineligibilityReason !== null) {
             return $this->fail($ineligibilityReason, Response::HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -199,6 +202,7 @@ class CheckoutController extends ApiController
                 'code' => $coupon->code,
                 'type' => $coupon->type,
                 'amount' => (float) $coupon->amount,
+                'birthday_discount_type' => $coupon->birthday_discount_type,
                 'discount' => $discount,
                 'free_items' => $freeItems,
             ],
@@ -246,7 +250,8 @@ class CheckoutController extends ApiController
         $shippingCharge = Setting::shippingChargeFor($subtotal);
         $orderTotal = max(0, $subtotal - $comboDiscount - $discount) + $shippingCharge;
 
-        $maxUsable = max(0, min($balance, (int) floor($orderTotal)));
+        $coinValue = Setting::gehnaCoinValue();
+        $maxUsable = max(0, min($balance, (int) floor(Order::roundAmount($orderTotal) / $coinValue)));
         if ($maxUsable < 1) {
             return $this->fail('Gehna Coins cannot be applied to this order right now.', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -258,10 +263,12 @@ class CheckoutController extends ApiController
 
         return $this->ok([
             'coins_used' => $used,
-            'discount' => (float) $used,
+            'discount' => Setting::coinsToMoney($used),
+            'coin_value' => $coinValue,
+            'max_usable' => $maxUsable,
             'balance' => $balance,
             'balance_after' => max(0, $balance - $used),
-        ], [], 'Gehna Coins applied: '.$used.' coins = Rs '.number_format((float) $used, 2).' off your order.');
+        ], [], 'Gehna Coins applied: '.$used.' coins = Rs '.number_format(Setting::coinsToMoney($used), 2).' off your order.');
     }
 
     /**
@@ -354,7 +361,7 @@ class CheckoutController extends ApiController
         $hasAppliedCombo = $this->comboService->hasAppliedCombo($cartItems, $comboSummary);
 
         $couponCode = $data['coupon_code'] ?? session('checkout_coupon.code');
-        $appliedCoupon = $this->getAppliedCouponSummary($cartItems, $user, $couponCode, $hasAppliedCombo);
+        $appliedCoupon = $this->getAppliedCouponSummary($cartItems, $user, $couponCode, $hasAppliedCombo, $data['billing_email'], $data['billing_phone']);
         $discount = (float) ($appliedCoupon['discount'] ?? 0);
         $comboDiscount = (float) ($comboSummary['discount'] ?? 0);
 
@@ -364,7 +371,7 @@ class CheckoutController extends ApiController
         $requestedCoins = isset($data['coins']) ? (int) $data['coins'] : (int) session('checkout_coins.coins', 0);
         $appliedCoins = $this->getAppliedCoinsSummary($user, $orderTotal, $requestedCoins);
         $coinsUsed = (int) ($appliedCoins['coins'] ?? 0);
-        $coinsDiscount = (float) $coinsUsed;
+        $coinsDiscount = (float) ($appliedCoins['discount'] ?? 0);
         $orderTotal = Order::roundAmount((float) $orderTotal - $coinsDiscount);
 
         if ($data['payment_method'] === 'razorpay' && $orderTotal < 1) {
@@ -386,6 +393,16 @@ class CheckoutController extends ApiController
             'country' => $data['billing_country'],
         ];
 
+        if ($appliedCoupon) {
+            $coupon = Coupon::find($appliedCoupon['id']);
+            $eligibilityError = $coupon
+                ? $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, $user->id, $billingAddress['email'], $billingAddress['phone'])
+                : 'This coupon is no longer available.';
+            if ($eligibilityError !== null) {
+                throw ValidationException::withMessages(['coupon_code' => [$eligibilityError]]);
+            }
+        }
+
         $shippingAddress = $shippingSame
             ? $billingAddress
             : [
@@ -406,6 +423,16 @@ class CheckoutController extends ApiController
                     throw ValidationException::withMessages([
                         'coins' => ['You do not have enough Gehna Coins to complete this order.'],
                     ]);
+                }
+
+                if ($appliedCoupon) {
+                    $coupon = Coupon::find($appliedCoupon['id']);
+                    $couponError = $coupon
+                        ? $this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, $user->id, $billingAddress['email'], $billingAddress['phone'])
+                        : 'This coupon is no longer available.';
+                    if ($couponError !== null) {
+                        throw ValidationException::withMessages(['coupon_code' => [$couponError]]);
+                    }
                 }
 
                 $order = Order::create([
@@ -451,7 +478,11 @@ class CheckoutController extends ApiController
                 if ($appliedCoupon) {
                     Coupon::whereKey($appliedCoupon['id'])->increment('used_count');
                     CouponUse::firstOrCreate(
-                        ['coupon_id' => $appliedCoupon['id'], 'user_id' => $user->id],
+                        [
+                            'coupon_id' => $appliedCoupon['id'],
+                            'user_id' => $user->id,
+                            'redemption_year' => ($appliedCoupon['type'] ?? '') === 'birthday' ? now()->year : 0,
+                        ],
                         ['order_id' => $order->id]
                     );
 
@@ -853,7 +884,7 @@ class CheckoutController extends ApiController
         return $this->comboService->applyExplicitComboPrices($cartItems);
     }
 
-    private function getAppliedCouponSummary($cartItems, User $user, ?string $code, bool $hasAppliedCombo): ?array
+    private function getAppliedCouponSummary($cartItems, User $user, ?string $code, bool $hasAppliedCombo, ?string $email = null, ?string $phone = null): ?array
     {
         if ($hasAppliedCombo || empty($code)) {
             return null;
@@ -866,7 +897,7 @@ class CheckoutController extends ApiController
         }
 
         $subtotal = (float) collect($cartItems)->sum(fn ($item) => (int) $item->quantity * (float) $item->price);
-        if ($this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo) !== null) {
+        if ($this->couponService->ineligibilityReason($coupon, $subtotal, $hasAppliedCombo, $user->id, $email ?? $user->email, $phone ?? $user->phone) !== null) {
             return null;
         }
 
@@ -877,6 +908,7 @@ class CheckoutController extends ApiController
             'code' => $coupon->code,
             'type' => $coupon->type,
             'amount' => (float) $coupon->amount,
+            'birthday_discount_type' => $coupon->birthday_discount_type,
             'buy_quantity' => (int) ($coupon->buy_quantity ?? 0),
             'get_quantity' => (int) ($coupon->get_quantity ?? 0),
             'reward_coins' => (int) ($coupon->reward_coins ?? 0),
@@ -888,12 +920,17 @@ class CheckoutController extends ApiController
     private function getAppliedCoinsSummary(User $user, float $orderTotal, int $requested): array
     {
         $balance = (int) ($user->gehna_coins ?? 0);
-        $coins = max(0, min($requested, $balance, (int) floor(max(0.0, $orderTotal))));
+        $coinValue = Setting::gehnaCoinValue();
+        $maxCoinsForOrder = (int) floor(max(0.0, Order::roundAmount($orderTotal)) / $coinValue);
+        $coins = max(0, min($requested, $balance, $maxCoinsForOrder));
+        $discount = min($orderTotal, Setting::coinsToMoney($coins));
 
         return [
             'requested' => $requested,
             'coins' => $coins,
-            'discount' => (float) $coins,
+            'discount' => $discount,
+            'coin_value' => $coinValue,
+            'max_usable' => min($balance, $maxCoinsForOrder),
             'balance' => $balance,
             'balance_after' => max(0, $balance - $coins),
         ];

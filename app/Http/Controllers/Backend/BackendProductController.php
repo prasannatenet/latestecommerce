@@ -80,6 +80,69 @@ class BackendProductController extends Controller
         return view('backend.product.create', compact('brands', 'categories', 'allCategories', 'attributes', 'tags'));
     }
 
+    public function recommendationProducts(Request $request)
+    {
+        $validated = $request->validate([
+            'type' => 'required|in:upsell,cross_sell',
+            'category_id' => 'nullable|exists:categories,id',
+            'current_category_id' => 'nullable|exists:categories,id',
+            'current_price' => 'nullable|numeric|min:0',
+            'product_id' => 'nullable|exists:products,id',
+            'search' => 'nullable|string|max:100',
+        ]);
+
+        if ($validated['type'] === 'upsell' && !empty($validated['product_id'])) {
+            $currentProduct = Product::query()->with('variations')->find($validated['product_id']);
+            if ($currentProduct) {
+                $validated['current_category_id'] = $currentProduct->category_id;
+                $validated['current_price'] = $currentProduct->effectivePrice();
+            }
+        }
+
+        $query = Product::query()->where('is_active', true)
+            ->with(['images' => fn ($images) => $images->orderByDesc('is_primary')->orderBy('id')]);
+
+        if (!empty($validated['product_id'])) {
+            $query->whereKeyNot($validated['product_id']);
+        }
+
+        if ($validated['type'] === 'upsell') {
+            if (empty($validated['current_category_id']) || !isset($validated['current_price'])) {
+                return response()->json(['data' => []]);
+            }
+            $query->where('category_id', $validated['current_category_id'])
+                ->where(function ($priceQuery) use ($validated) {
+                    $priceQuery->whereRaw('COALESCE(sale_price, base_price) > ?', [$validated['current_price']])
+                        ->orWhereHas('variations', function ($variationQuery) use ($validated) {
+                            $variationQuery->where('is_active', true)
+                                ->whereRaw('COALESCE(sale_price, price) > ?', [$validated['current_price']]);
+                        });
+                });
+        } else {
+            if (empty($validated['category_id']) && empty($validated['search'])) {
+                return response()->json(['data' => []]);
+            }
+            if (!empty($validated['category_id'])) {
+                $query->where('category_id', $validated['category_id']);
+            }
+        }
+
+        if (!empty($validated['search'])) {
+            $query->where('name', 'like', '%' . $validated['search'] . '%');
+        }
+
+        $products = $query->orderBy('name')->limit(30)->get()->map(fn (Product $product) => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'price' => number_format($product->effectivePrice(), 2, '.', ','),
+            'image' => $product->primary_image
+                ? asset('storage/' . ltrim($product->primary_image, '/'))
+                : ($product->images->first()?->path ? asset('storage/' . ltrim($product->images->first()->path, '/')) : asset('frontend/images/product-1.jpeg')),
+        ]);
+
+        return response()->json(['data' => $products]);
+    }
+
     public function store(Request $request, ProductPriceHistoryService $priceHistory)
     {
         $rules = [
@@ -88,6 +151,8 @@ class BackendProductController extends Controller
             'short_description' => 'nullable|string',
             'description'       => 'nullable|string',
             'base_price'        => 'required|numeric|min:0',
+            'return_days'        => 'nullable|integer|min:0|max:3650',
+            'exchange_days'      => 'nullable|integer|min:0|max:3650',
             'sale_price'        => 'nullable|numeric|min:0',
             'discount_type'     => 'nullable|in:fixed,percentage',
             'discount_value'    => 'nullable|numeric|min:0',
@@ -103,6 +168,11 @@ class BackendProductController extends Controller
             'videos.*'          => 'nullable|file|mimes:mp4,webm,mov|max:51200',
             'tag_ids'           => 'nullable|array',
             'tag_ids.*'         => 'exists:tags,id',
+            'upsell_product_ids' => 'nullable|array',
+            'upsell_product_ids.*' => 'integer|distinct|exists:products,id',
+            'cross_sell_category_id' => 'nullable|exists:categories,id',
+            'cross_sell_product_ids' => 'nullable|array',
+            'cross_sell_product_ids.*' => 'integer|distinct|exists:products,id|not_in:' . ($product->id ?? 0),
         ];
 
         // Simple-product specific fields
@@ -130,7 +200,7 @@ class BackendProductController extends Controller
 
         try {
             $productData = $validated;
-            unset($productData['images'], $productData['videos'], $productData['tag_ids'], $productData['attribute_ids'], $productData['attribute_values']);
+            unset($productData['images'], $productData['videos'], $productData['tag_ids'], $productData['attribute_ids'], $productData['attribute_values'], $productData['upsell_product_ids'], $productData['cross_sell_product_ids'], $productData['cross_sell_category_id']);
 
             if ($request->hasFile('primary_image')) {
                 $productData['primary_image'] = $this->imageService->optimizeAndStore(
@@ -148,6 +218,7 @@ class BackendProductController extends Controller
             if ($request->has('tag_ids')) {
                 $product->tags()->sync($request->tag_ids);
             }
+            $this->syncRecommendations($product, $request);
 
             // Attach attributes (variable products only)
             if ($request->product_type === 'variable') {
@@ -220,7 +291,7 @@ class BackendProductController extends Controller
 
     public function edit(Product $product)
     {
-        $product->load('images', 'videos', 'variations', 'attributes', 'tags');
+        $product->load('images', 'videos', 'variations', 'attributes', 'tags', 'upsellProducts.images', 'crossSellProducts.images');
         $brands = Brand::all();
         $categories = Category::whereNull('parent_id')->with('childrenRecursive')->get();
         $allCategories = Category::all();
@@ -238,6 +309,8 @@ class BackendProductController extends Controller
             'short_description' => 'nullable|string',
             'description'       => 'nullable|string',
             'base_price'        => 'required|numeric|min:0',
+            'return_days'        => 'nullable|integer|min:0|max:3650',
+            'exchange_days'      => 'nullable|integer|min:0|max:3650',
             'sale_price'        => 'nullable|numeric|min:0',
             'discount_type'     => 'nullable|in:fixed,percentage',
             'discount_value'    => 'nullable|numeric|min:0',
@@ -253,6 +326,11 @@ class BackendProductController extends Controller
             'videos.*'          => 'nullable|file|mimes:mp4,webm,mov|max:51200',
             'tag_ids'           => 'nullable|array',
             'tag_ids.*'         => 'exists:tags,id',
+            'upsell_product_ids' => 'nullable|array',
+            'upsell_product_ids.*' => 'integer|distinct|exists:products,id',
+            'cross_sell_category_id' => 'nullable|exists:categories,id',
+            'cross_sell_product_ids' => 'nullable|array',
+            'cross_sell_product_ids.*' => 'integer|distinct|exists:products,id|not_in:' . $product->id,
         ];
 
         if ($request->product_type === 'simple') {
@@ -280,7 +358,7 @@ class BackendProductController extends Controller
 
         try {
             $productData = $validated;
-            unset($productData['images'], $productData['videos'], $productData['tag_ids'], $productData['attribute_ids'], $productData['attribute_values']);
+            unset($productData['images'], $productData['videos'], $productData['tag_ids'], $productData['attribute_ids'], $productData['attribute_values'], $productData['upsell_product_ids'], $productData['cross_sell_product_ids'], $productData['cross_sell_category_id']);
 
             if ($request->hasFile('primary_image')) {
                 $productData['primary_image'] = $this->imageService->optimizeAndStore(
@@ -296,6 +374,7 @@ class BackendProductController extends Controller
 
             // Sync tags
             $product->tags()->sync($request->tag_ids ?? []);
+            $this->syncRecommendations($product, $request);
 
             // Handle attributes based on product type
             if ($request->product_type === 'variable') {
@@ -466,6 +545,40 @@ class BackendProductController extends Controller
         }
 
         return $data;
+    }
+
+    private function syncRecommendations(Product $product, Request $request): void
+    {
+        $upsellIds = collect($request->input('upsell_product_ids', []))
+            ->map(fn ($id) => (int) $id)->unique()->values();
+        $crossSellIds = collect($request->input('cross_sell_product_ids', []))
+            ->map(fn ($id) => (int) $id)->unique()->values();
+
+        if ($product->category_id) {
+            $upsellIds = Product::query()->whereIn('id', $upsellIds)
+                ->where('category_id', $product->category_id)
+                ->where(function ($priceQuery) use ($product) {
+                    $priceQuery->whereRaw('COALESCE(sale_price, base_price) > ?', [$product->effectivePrice()])
+                        ->orWhereHas('variations', function ($variationQuery) use ($product) {
+                            $variationQuery->where('is_active', true)
+                                ->whereRaw('COALESCE(sale_price, price) > ?', [$product->effectivePrice()]);
+                        });
+                })
+                ->pluck('id');
+        } else {
+            $upsellIds = collect();
+        }
+
+        $crossSellCategoryId = $request->input('cross_sell_category_id');
+        $crossSellIds = $crossSellCategoryId
+            ? Product::query()->whereIn('id', $crossSellIds)
+                ->where('category_id', $crossSellCategoryId)
+                ->where('id', '!=', $product->id)
+                ->pluck('id')
+            : collect();
+
+        $product->upsellProducts()->sync($upsellIds);
+        $product->crossSellProducts()->sync($crossSellIds);
     }
 
     /* ───── Variation Methods ───── */

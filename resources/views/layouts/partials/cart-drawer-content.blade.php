@@ -34,5 +34,24 @@
             <span>Subtotal</span>
             <strong>₹ {{ number_format((float) ($headerCartSubtotal ?? 0), 2) }}</strong>
         </div>
+        @if (($cartCrossSellSuggestions ?? collect())->isNotEmpty())
+            <section class="cart-drawer-suggestions" aria-label="You may also like">
+                <h3>You may also like</h3>
+                @foreach ($cartCrossSellSuggestions as $suggestion)
+                    <article class="cart-drawer-suggestion">
+                        <a class="cart-drawer-suggestion-product" href="{{ url('/product/' . $suggestion['slug']) }}">
+                            <img src="{{ $suggestion['image'] }}" alt="" loading="lazy">
+                            <span class="cart-drawer-suggestion-details">
+                                <span class="cart-drawer-suggestion-name">{{ $suggestion['name'] }}</span>
+                                <span class="cart-drawer-suggestion-price">₹ {{ number_format((float) $suggestion['price'], 2) }}</span>
+                            </span>
+                        </a>
+                        <button class="cart-drawer-suggestion-add" type="button"
+                            data-cart-add-url="{{ route('storefront.cart.add') }}"
+                            data-product-id="{{ $suggestion['id'] }}">Add</button>
+                    </article>
+                @endforeach
+            </section>
+        @endif
     </div>
 @endif

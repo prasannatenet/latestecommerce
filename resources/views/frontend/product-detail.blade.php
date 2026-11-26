@@ -295,7 +295,15 @@
                         </div>
                         <div class="product-highlight">
                             <span class="material-symbols-outlined" aria-hidden="true">autorenew</span>
-                            <span>Easy<br>Returns</span>
+                            <span>
+                                @if ($returnDays === null)
+                                    Return<br>Support
+                                @elseif ((int) $returnDays === 0)
+                                    No<br>Returns
+                                @else
+                                    {{ $returnDays }}-Day<br>Returns
+                                @endif
+                            </span>
                         </div>
                     </div>
 
@@ -322,7 +330,7 @@
                         alt="Jewelry quality badges" loading="lazy">
                     <p class="product-cart-status" role="status" aria-live="polite"></p>
 
-                    @if ($product->description || $currentDescription)
+                    @if ($product->description || $currentDescription || $returnDays !== null || $exchangeDays !== null)
                         <div class="product-accordion">
                             <details class="product-accordion-item" open>
                                 <summary>Product Details</summary>
@@ -339,7 +347,26 @@
                             <details class="product-accordion-item">
                                 <summary>Return Policy</summary>
                                 <div class="product-accordion-content">
-                                    <p>If your order is damaged or incorrect, contact our support team for help with a return or replacement.</p>
+                                    @if ($returnDays === null)
+                                        <p>Contact our support team to check return eligibility for this product.</p>
+                                    @elseif ((int) $returnDays === 0)
+                                        <p>This product is not eligible for return.</p>
+                                    @else
+                                        <p>Returns are available within {{ $returnDays }} {{ \Illuminate\Support\Str::plural('day', (int) $returnDays) }} after delivery.</p>
+                                    @endif
+                                    <p>If your order is damaged or incorrect, contact our support team for help.</p>
+                                </div>
+                            </details>
+                            <details class="product-accordion-item">
+                                <summary>Exchange Policy</summary>
+                                <div class="product-accordion-content">
+                                    @if ($exchangeDays === null)
+                                        <p>Contact our support team to check exchange eligibility for this product.</p>
+                                    @elseif ((int) $exchangeDays === 0)
+                                        <p>This product is not eligible for exchange.</p>
+                                    @else
+                                        <p>Exchanges are available within {{ $exchangeDays }} {{ \Illuminate\Support\Str::plural('day', (int) $exchangeDays) }} after delivery.</p>
+                                    @endif
                                 </div>
                             </details>
                         </div>
@@ -369,101 +396,9 @@
                 </div>
             </dialog>
 
-            <section class="customer-reviews" id="product-reviews" data-product-id="{{ $product->id }}"
-                data-server-reviews="{{ $reviewsForBrowser->toJson() }}"
-                aria-labelledby="customer-reviews-title">
-                <div class="reviews-heading">
-                    <div>
-                        <p class="product-eyebrow">YOUR EXPERIENCE MATTERS</p>
-                        <h2 id="customer-reviews-title">Customer Reviews</h2>
-                    </div>
-                    <a class="reviews-write-link" href="#write-review">Write a Review</a>
-                </div>
+        </section>
 
-                <div class="reviews-overview">
-                    <div class="reviews-average">
-                        <strong data-reviews-average>{{ $reviewsCount ? number_format($averageRating, 1) : '—' }}</strong>
-                        <span class="review-stars" data-reviews-stars
-                            aria-label="{{ $reviewsCount ? 'Rated ' . number_format($averageRating, 1) . ' out of 5' : 'No ratings yet' }}">
-                            {{ str_repeat('★', (int) round($averageRating)) }}{{ str_repeat('☆', 5 - (int) round($averageRating)) }}
-                        </span>
-                        <span data-reviews-total>
-                            {{ $reviewsCount }} {{ $reviewsCount === 1 ? 'review' : 'reviews' }}
-                        </span>
-                    </div>
-                    <div class="reviews-breakdown" aria-label="Ratings breakdown">
-                        @for ($rating = 5; $rating >= 1; $rating--)
-                            @php
-                                $ratingCount = (int) ($ratingCounts[$rating] ?? 0);
-                                $ratingWidth = $reviewsCount ? ($ratingCount / $reviewsCount) * 100 : 0;
-                            @endphp
-                            <div class="review-rating-row">
-                                <span>{{ $rating }} {{ $rating === 1 ? 'star' : 'stars' }}</span>
-                                <span class="review-rating-track"><span data-rating-fill="{{ $rating }}"
-                                    style="width: {{ $ratingWidth }}%"></span></span>
-                                <span data-rating-count="{{ $rating }}">{{ $ratingCount }}</span>
-                            </div>
-                        @endfor
-                    </div>
-                </div>
 
-                <div class="reviews-body">
-                    <div class="reviews-list-section">
-                        <h3>Recent Reviews <span data-review-list-count>({{ $reviewsCount }})</span></h3>
-                        <div class="review-list" aria-live="polite">
-                            @forelse ($reviews as $review)
-                                <article class="review-card">
-                                    <div class="review-card-header">
-                                        <span class="review-card-name">{{ $review->user?->name ?: 'Customer' }}</span>
-                                        <time class="review-card-date" datetime="{{ $review->created_at?->toDateString() }}">
-                                            {{ $review->created_at?->format('M j, Y') }}
-                                        </time>
-                                    </div>
-                                    <div class="review-card-stars" aria-label="Rated {{ $review->rating }} out of 5">
-                                        {{ str_repeat('★', (int) $review->rating) }}{{ str_repeat('☆', 5 - (int) $review->rating) }}
-                                    </div>
-                                    <p class="review-card-text">{{ $review->comment }}</p>
-                                    @if ($review->images->isNotEmpty())
-                                        <div class="review-images">
-                                            @foreach ($review->images as $image)
-                                                <img src="{{ asset('storage/' . ltrim($image->path, '/')) }}"
-                                                    alt="Customer review photo" loading="lazy">
-                                            @endforeach
-                                        </div>
-                                    @endif
-                                </article>
-                            @empty
-                                <p class="reviews-empty-state">No reviews yet. Be the first to share your experience.</p>
-                            @endforelse
-                        </div>
-                    </div>
-
-                    <form class="review-form" id="write-review">
-                        <h3>Write a Review</h3>
-                        <p class="review-form-intro">Tell others what you think about this piece.</p>
-                        <p class="review-storage-note">Reviews are saved in this browser.</p>
-                        <fieldset class="review-rating-field">
-                            <legend>Your rating <span aria-hidden="true">*</span></legend>
-                            <div class="review-rating-options">
-                                @for ($rating = 5; $rating >= 1; $rating--)
-                                    <input type="radio" id="review-rating-{{ $rating }}" name="rating"
-                                        value="{{ $rating }}" @required($rating === 5)>
-                                    <label for="review-rating-{{ $rating }}" aria-label="{{ $rating }} stars"
-                                        title="{{ $rating }} stars">★</label>
-                                @endfor
-                            </div>
-                        </fieldset>
-                        <label class="review-form-label" for="review-name">Your name</label>
-                        <input class="review-form-input" id="review-name" name="name" type="text" maxlength="80"
-                            autocomplete="name" placeholder="Enter your name" required>
-                        <label class="review-form-label" for="review-text">Your review</label>
-                        <textarea class="review-form-input" id="review-text" name="review" rows="4" maxlength="1000"
-                            placeholder="Share your experience with this product" required></textarea>
-                        <button class="review-submit-button" type="submit">Submit Review</button>
-                        <p class="review-form-status" role="status" aria-live="polite"></p>
-                    </form>
-                </div>
-            </section>
         </section>
     </div>
 
@@ -569,6 +504,46 @@
         </section>
     @endif
 
+    @foreach ([['products' => $upsellProducts, 'title' => 'Something More Exquisite', 'id' => 'upsellProducts'], ['products' => $crossSellProducts, 'title' => 'A Match Made in Silver', 'id' => 'crossSellProducts']] as $recommendationGroup)
+        @if ($recommendationGroup['products']->isNotEmpty())
+            <section class="handpicked pt-6 pb-6 product-suggestion-section" id="{{ $recommendationGroup['id'] }}">
+                <div class="container">
+                    <div class="section-heading">
+                        <h2>{{ $recommendationGroup['title'] }}</h2>
+                        <p>Discover favourites that belong together.</p>
+                    </div>
+                    <div class="swiper handpickedSwiper mt-2">
+                        <div class="swiper-wrapper">
+                            @foreach ($recommendationGroup['products'] as $suggestion)
+                                @include('frontend.partials.best-seller-card', [
+                                    'products' => [[
+                                        'id' => (int) $suggestion->id,
+                                        'name' => $suggestion->name,
+                                        'slug' => $suggestion->slug,
+                                        'image' => $suggestion->primary_image
+                                            ? asset('storage/' . ltrim($suggestion->primary_image, '/'))
+                                            : ($suggestion->images->firstWhere('is_primary', true)
+                                                ? asset('storage/' . ltrim($suggestion->images->firstWhere('is_primary', true)->path, '/'))
+                                                : ($suggestion->images->first()
+                                                    ? asset('storage/' . ltrim($suggestion->images->first()->path, '/'))
+                                                    : $placeholderImage)),
+                                        'hover_image' => null,
+                                        'price' => $suggestion->effectivePrice(),
+                                        'regular_price' => $suggestion->regularPrice(),
+                                        'rating' => null,
+                                        'reviews_count' => 0,
+                                    ]],
+                                    'wishlistProductIds' => $wishlistProductIds,
+                                ])
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            </section>
+        @endif
+    @endforeach
+
+
     @if ($relatedProducts->isNotEmpty())
         <section class="handpicked pt-6 pb-6" id="relatedProducts" style="background-color: #fbf5eb;">
             <div class="container">
@@ -606,7 +581,105 @@
             </div>
         </section>
     @endif
-@endsection
+
+    <section class="customer-reviews" id="product-reviews" data-product-id="{{ $product->id }}"
+                data-server-reviews="{{ $reviewsForBrowser->toJson() }}"
+                aria-labelledby="customer-reviews-title">
+                <div class="reviews-heading">
+                    <div>
+                        <p class="product-eyebrow">YOUR EXPERIENCE MATTERS</p>
+                        <h2 id="customer-reviews-title">Customer Reviews</h2>
+                    </div>
+                    <a class="reviews-write-link" href="#write-review">Write a Review</a>
+                </div>
+
+                <div class="reviews-overview">
+                    <div class="reviews-average">
+                        <strong data-reviews-average>{{ $reviewsCount ? number_format($averageRating, 1) : '—' }}</strong>
+                        <span class="review-stars" data-reviews-stars
+                            aria-label="{{ $reviewsCount ? 'Rated ' . number_format($averageRating, 1) . ' out of 5' : 'No ratings yet' }}">
+                            {{ str_repeat('★', (int) round($averageRating)) }}{{ str_repeat('☆', 5 - (int) round($averageRating)) }}
+                        </span>
+                        <span data-reviews-total>
+                            {{ $reviewsCount }} {{ $reviewsCount === 1 ? 'review' : 'reviews' }}
+                        </span>
+                    </div>
+                    <div class="reviews-breakdown" aria-label="Ratings breakdown">
+                        @for ($rating = 5; $rating >= 1; $rating--)
+                            @php
+                                $ratingCount = (int) ($ratingCounts[$rating] ?? 0);
+                                $ratingWidth = $reviewsCount ? ($ratingCount / $reviewsCount) * 100 : 0;
+                            @endphp
+                            <div class="review-rating-row">
+                                <span>{{ $rating }} {{ $rating === 1 ? 'star' : 'stars' }}</span>
+                                <span class="review-rating-track"><span data-rating-fill="{{ $rating }}"
+                                    style="width: {{ $ratingWidth }}%"></span></span>
+                                <span data-rating-count="{{ $rating }}">{{ $ratingCount }}</span>
+                            </div>
+                        @endfor
+                    </div>
+                </div>
+
+                <div class="reviews-body">
+                    <div class="reviews-list-section">
+                        <h3>Recent Reviews <span data-review-list-count>({{ $reviewsCount }})</span></h3>
+                        <div class="review-list" aria-live="polite">
+                            @forelse ($reviews as $review)
+                                <article class="review-card">
+                                    <div class="review-card-header">
+                                        <span class="review-card-name">{{ $review->user?->name ?: 'Customer' }}</span>
+                                        <time class="review-card-date" datetime="{{ $review->created_at?->toDateString() }}">
+                                            {{ $review->created_at?->format('M j, Y') }}
+                                        </time>
+                                    </div>
+                                    <div class="review-card-stars" aria-label="Rated {{ $review->rating }} out of 5">
+                                        {{ str_repeat('★', (int) $review->rating) }}{{ str_repeat('☆', 5 - (int) $review->rating) }}
+                                    </div>
+                                    <p class="review-card-text">{{ $review->comment }}</p>
+                                    @if ($review->images->isNotEmpty())
+                                        <div class="review-images">
+                                            @foreach ($review->images as $image)
+                                                <img src="{{ asset('storage/' . ltrim($image->path, '/')) }}"
+                                                    alt="Customer review photo" loading="lazy">
+                                            @endforeach
+                                        </div>
+                                    @endif
+
+                                </article>
+                            @empty
+                                <p class="reviews-empty-state">No reviews yet. Be the first to share your experience.</p>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    <form class="review-form" id="write-review">
+                        <h3>Write a Review</h3>
+                        <p class="review-form-intro">Tell others what you think about this piece.</p>
+                        <p class="review-storage-note">Reviews are saved in this browser.</p>
+                        <fieldset class="review-rating-field">
+                            <legend>Your rating <span aria-hidden="true">*</span></legend>
+                            <div class="review-rating-options">
+                                @for ($rating = 5; $rating >= 1; $rating--)
+                                    <input type="radio" id="review-rating-{{ $rating }}" name="rating"
+                                        value="{{ $rating }}" @required($rating === 5)>
+                                    <label for="review-rating-{{ $rating }}" aria-label="{{ $rating }} stars"
+                                        title="{{ $rating }} stars">★</label>
+                                @endfor
+                            </div>
+                        </fieldset>
+                        <label class="review-form-label" for="review-name">Your name</label>
+                        <input class="review-form-input" id="review-name" name="name" type="text" maxlength="80"
+                            autocomplete="name" placeholder="Enter your name" required>
+                        <label class="review-form-label" for="review-text">Your review</label>
+                        <textarea class="review-form-input" id="review-text" name="review" rows="4" maxlength="1000"
+                            placeholder="Share your experience with this product" required></textarea>
+                        <button class="review-submit-button" type="submit">Submit Review</button>
+                        <p class="review-form-status" role="status" aria-live="polite"></p>
+                    </form>
+                </div>
+            </section>
+
+    @endsection
 
 @push('scripts')
     <script>
@@ -639,6 +712,12 @@
 
 @push('styles')
     <style>
+        .product-suggestion-section,
+        #relatedProducts,
+        #frequentlyBoughtTogether {
+            background-color: #fbf5eb !important;
+        }
+
         .product-combo-offers{background:linear-gradient(180deg,#fff 0%,#fcfaf7 100%)}
         .product-combo-offer-list{display:grid;gap:18px;margin-top:22px}
         .product-combo-offer{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 205px;gap:24px;overflow:hidden;padding:24px;border:1px solid #e9e1d6;border-radius:12px;background:#fff;box-shadow:0 8px 24px rgb(62 43 20 / 7%)}

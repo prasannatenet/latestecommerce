@@ -19,6 +19,8 @@ class Coupon extends Model
         'starts_at',
         'expires_at',
         'is_active',
+        'first_purchase_only',
+        'birthday_discount_type',
     ];
 
     protected $casts = [
@@ -30,6 +32,7 @@ class Coupon extends Model
         'starts_at' => 'datetime',
         'expires_at' => 'datetime',
         'is_active' => 'boolean',
+        'first_purchase_only' => 'boolean',
     ];
 
     /**
@@ -48,6 +51,13 @@ class Coupon extends Model
     {
         if (! $userId) {
             return false;
+        }
+
+        if ($this->type === 'birthday') {
+            return $this->uses()
+                ->where('user_id', $userId)
+                ->where('redemption_year', now()->year)
+                ->exists();
         }
 
         return $this->uses()->where('user_id', $userId)->exists();

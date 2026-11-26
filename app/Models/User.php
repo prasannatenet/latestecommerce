@@ -23,6 +23,8 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'date_of_birth',
+        'profile_picture',
         'password',
         'gehna_coins',
     ];
@@ -48,6 +50,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'gehna_coins' => 'integer',
+            'date_of_birth' => 'date',
         ];
     }
     public function carts()
@@ -63,6 +66,16 @@ class User extends Authenticatable
     public function orders()
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function addresses()
+    {
+        return $this->hasMany(UserAddress::class);
+    }
+
+    public function primaryAddress()
+    {
+        return $this->hasOne(UserAddress::class)->where('is_primary', true);
     }
 
     public function activityEvents()

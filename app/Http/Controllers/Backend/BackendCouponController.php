@@ -32,6 +32,7 @@ class BackendCouponController extends Controller
     {
         $data = $this->validateData($request);
         $data['is_active'] = $request->boolean('is_active', true);
+        $data['first_purchase_only'] = $request->boolean('first_purchase_only');
         Coupon::create($data);
 
         return redirect()->route('admin.coupons.index')->with('success', 'Coupon created successfully.');
@@ -60,6 +61,7 @@ class BackendCouponController extends Controller
     {
         $data = $this->validateData($request, $coupon->id);
         $data['is_active'] = $request->boolean('is_active', false);
+        $data['first_purchase_only'] = $request->boolean('first_purchase_only');
         $coupon->update($data);
 
         return redirect()->route('admin.coupons.index')->with('success', 'Coupon updated successfully.');
@@ -83,8 +85,9 @@ class BackendCouponController extends Controller
 
         return $request->validate([
             'code' => $codeRule,
-            'type' => 'required|in:percent,fixed,buy_get,gehna_coins',
-            'amount' => 'nullable|numeric|min:0.01',
+            'type' => 'required|in:percent,fixed,buy_get,gehna_coins,birthday',
+            'amount' => 'nullable|required_if:type,birthday|numeric|min:0.01',
+            'birthday_discount_type' => 'required_if:type,birthday|nullable|in:percent,fixed',
             'buy_quantity' => 'required_if:type,buy_get|nullable|integer|min:1',
             'get_quantity' => 'required_if:type,buy_get|nullable|integer|min:1',
             'reward_coins' => 'required_if:type,gehna_coins|nullable|integer|min:1',
@@ -93,6 +96,7 @@ class BackendCouponController extends Controller
             'starts_at' => 'nullable|date',
             'expires_at' => 'nullable|date|after_or_equal:starts_at',
             'is_active' => 'nullable|boolean',
+            'first_purchase_only' => 'nullable|boolean',
         ]);
     }
 }

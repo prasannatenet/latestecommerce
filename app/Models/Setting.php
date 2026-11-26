@@ -36,6 +36,10 @@ class Setting extends Model
         'shipping_policy',
         'return_policy',
         'free_shipping_minimum',
+        'default_return_days',
+        'default_exchange_days',
+        'gehna_coin_value',
+        'gehna_coin_reward_percent',
     ];
 
     protected $casts = [
@@ -44,7 +48,28 @@ class Setting extends Model
         'shipping_policy' => 'array',
         'return_policy' => 'array',
         'free_shipping_minimum' => 'decimal:2',
+        'default_return_days' => 'integer',
+        'default_exchange_days' => 'integer',
+        'gehna_coin_value' => 'decimal:4',
+        'gehna_coin_reward_percent' => 'decimal:2',
     ];
+
+    public static function gehnaCoinValue(): float
+    {
+        $value = static::query()->value('gehna_coin_value');
+
+        return is_numeric($value) && (float) $value > 0 ? (float) $value : 1.0;
+    }
+
+    public function getGehnaCoinAmountAttribute(): float
+    {
+        return (float) ($this->gehna_coin_value ?? 1);
+    }
+
+    public static function coinsToMoney(int $coins): float
+    {
+        return round(max(0, $coins) * static::gehnaCoinValue(), 2);
+    }
 
     public static function shippingChargeFor(float $subtotal, bool $cartIsEmpty = false): float
     {
@@ -89,3 +114,5 @@ class Setting extends Model
         Config::set('mail.from.name', $this->smtp_from_name ?: config('mail.from.name'));
     }
 }
+
+

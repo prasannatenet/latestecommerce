@@ -13,6 +13,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use App\Services\CustomerActivityService;
+use App\Services\CartDrawerCrossSellService;
 
 class StorefrontCartController extends Controller
 {
@@ -96,7 +97,7 @@ class StorefrontCartController extends Controller
         return redirect()->route('checkout.index')->with('success', 'Combo added to your cart.');
     }
 
-    public function add(Request $request, CustomerActivityService $activity): JsonResponse
+    public function add(Request $request, CustomerActivityService $activity, CartDrawerCrossSellService $crossSells): JsonResponse
     {
         $data = $request->validate([
             'product_id' => ['required', 'integer', 'exists:products,id'],
@@ -193,11 +194,12 @@ class StorefrontCartController extends Controller
             'drawer_html' => view('layouts.partials.cart-drawer-content', [
                 'headerCartItems' => $cart['items'],
                 'headerCartSubtotal' => $cart['subtotal'],
+                'cartCrossSellSuggestions' => $crossSells->suggestions($cart['items']),
             ])->render(),
         ]);
     }
 
-    public function remove(Request $request, CustomerActivityService $activity): JsonResponse
+    public function remove(Request $request, CustomerActivityService $activity, CartDrawerCrossSellService $crossSells): JsonResponse
     {
         if (Auth::check()) {
             $data = $request->validate([
@@ -244,6 +246,7 @@ class StorefrontCartController extends Controller
             'drawer_html' => view('layouts.partials.cart-drawer-content', [
                 'headerCartItems' => $cart['items'],
                 'headerCartSubtotal' => $cart['subtotal'],
+                'cartCrossSellSuggestions' => $crossSells->suggestions($cart['items']),
             ])->render(),
         ]);
     }

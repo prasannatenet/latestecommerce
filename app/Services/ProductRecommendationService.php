@@ -91,7 +91,16 @@ class ProductRecommendationService
     private function validOrdersQuery(): Builder
     {
         return Order::query()
-            ->where('payment_status', 'paid')
+            ->where(function (Builder $query): void {
+                $query->where('payment_status', 'paid')
+                    ->orWhere(function (Builder $cod): void {
+                        // COD orders become real purchase signals once they
+                        // are being fulfilled; a newly placed, still-pending
+                        // COD checkout is not a purchase yet.
+                        $cod->where('payment_method', 'cod')
+                            ->whereIn('status', ['processing', 'shipped', 'delivered']);
+                    });
+            })
             ->whereNotIn('status', ['cancelled', 'failed', 'refunded'])
             ->where(function (Builder $query): void {
                 $query->whereNull('refund_status')
@@ -101,6 +110,6 @@ class ProductRecommendationService
 
     private function cacheKey(int $productId): string
     {
-        return 'product-recommendations:v1:'.$productId;
+        return 'product-recommendations:v2:'.$productId;
     }
 }

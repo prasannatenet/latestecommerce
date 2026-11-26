@@ -11,11 +11,22 @@ use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 
 class CustomerActivityService
 {
+    private function trackingTablesAvailable(): bool
+    {
+        static $available;
+
+        return $available ??= Schema::hasTable('cart_sessions')
+            && Schema::hasTable('cart_session_items')
+            && Schema::hasTable('customer_activity_events');
+    }
+
     public function log(Request $request, string $type, array $data = []): ?CustomerActivityEvent
     {
+        if (! $this->trackingTablesAvailable()) return null;
         $user = $request->user();
         if (! $user || $user->hasRole('admin') || $user->can('access admin')) return null;
 
@@ -55,6 +66,9 @@ class CustomerActivityService
     public function activeCart(Request $request, ?User $user = null): CartSession
     {
         $user ??= $request->user();
+        if (! $this->trackingTablesAvailable()) {
+            throw new \RuntimeException('Customer activity tracking tables are not available.');
+        }
         $sessionKey = 'customer_activity_cart_session';
         $cartId = $request->hasSession() ? $request->session()->get($sessionKey) : null;
         $cart = $cartId
@@ -99,6 +113,7 @@ class CustomerActivityService
 
     public function startCheckout(Request $request, ?float $checkoutTotal = null, ?float $discount = null): void
     {
+        if (! $this->trackingTablesAvailable()) return;
         $cart = $this->syncCart($request);
         $cart->update(['total' => $checkoutTotal ?? $cart->subtotal, 'discount' => $discount ?? 0]);
         if (! $cart->checkout_started_at) {
@@ -109,6 +124,7 @@ class CustomerActivityService
 
     public function recordOrderPlaced(Request $request, Order $order): void
     {
+        if (! $this->trackingTablesAvailable()) return;
         $cart = $this->activeCart($request);
         $this->log($request, 'order_placed', ['cart_session_id' => $cart->id, 'order_id' => $order->id, 'total' => $order->total, 'properties' => ['order_number' => $order->order_number ?? $order->id]]);
         $cart->update(['status' => 'converted', 'converted_at' => now(), 'order_id' => $order->id, 'total' => $order->total]);
@@ -117,6 +133,7 @@ class CustomerActivityService
 
     public function confirmOrder(Order $order, ?Request $request = null): void
     {
+        if (! $this->trackingTablesAvailable()) return;
         if (CustomerActivityEvent::query()->where('order_id', $order->id)->where('event_type', 'order_placed')->exists()) return;
         $createdEvent = CustomerActivityEvent::query()->where('order_id', $order->id)->where('event_type', 'order_created')->latest('id')->first();
         $cart = $createdEvent?->cartSession;
@@ -135,6 +152,7 @@ class CustomerActivityService
 
     public function logOrderCreated(Request $request, Order $order): void
     {
+        if (! $this->trackingTablesAvailable()) return;
         $cart = $this->syncCart($request);
         $items = $cart->items()->whereNull('removed_at')->get()->map(fn ($item) => ['product_id' => $item->product_id, 'name' => $item->product_name, 'sku' => $item->sku, 'quantity' => $item->quantity, 'unit_price' => (float) $item->unit_price]);
         $cart->update(['total' => $order->total, 'order_id' => $order->id]);

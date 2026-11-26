@@ -29,6 +29,8 @@ class Product extends Model
         'manage_stock',
         'weight',
         'tax_class',
+        'return_days',
+        'exchange_days',
     ];
 
     protected $casts = [
@@ -38,6 +40,8 @@ class Product extends Model
         'sale_price'   => 'decimal:2',
         'discount_value' => 'decimal:2',
         'weight'       => 'decimal:2',
+        'return_days' => 'integer',
+        'exchange_days' => 'integer',
     ];
 
     protected static function boot()
@@ -91,6 +95,16 @@ class Product extends Model
     public function tags()
     {
         return $this->belongsToMany(Tag::class, 'product_tag')->withTimestamps();
+    }
+
+    public function upsellProducts()
+    {
+        return $this->belongsToMany(self::class, 'product_upsells', 'product_id', 'upsell_product_id')->withTimestamps()->orderBy('products.name');
+    }
+
+    public function crossSellProducts()
+    {
+        return $this->belongsToMany(self::class, 'product_cross_sells', 'product_id', 'cross_sell_product_id')->withTimestamps()->orderBy('products.name');
     }
 
     public function combos()

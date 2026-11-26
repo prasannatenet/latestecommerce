@@ -13,7 +13,18 @@
             <option value="fixed" {{ $selectedType === 'fixed' ? 'selected' : '' }}>Fixed (₹)</option>
             <option value="buy_get" {{ $selectedType === 'buy_get' ? 'selected' : '' }}>Buy X Get Y Free</option>
             <option value="gehna_coins" {{ $selectedType === 'gehna_coins' ? 'selected' : '' }}>Gehna Coins</option>
+            <option value="birthday" {{ $selectedType === 'birthday' ? 'selected' : '' }}>Birthday Offer</option>
         </select>
+    </div>
+
+    <div class="col-md-4 birthday-discount-field" style="display:none;">
+        <label class="df-form-label">Birthday discount type <span class="text-danger">*</span></label>
+        @php $birthdayDiscountType = old('birthday_discount_type', optional($coupon)->birthday_discount_type ?? 'percent'); @endphp
+        <select name="birthday_discount_type" class="df-form-select">
+            <option value="percent" {{ $birthdayDiscountType === 'percent' ? 'selected' : '' }}>Percent (%)</option>
+            <option value="fixed" {{ $birthdayDiscountType === 'fixed' ? 'selected' : '' }}>Fixed amount</option>
+        </select>
+        <p class="df-form-hint">Available only on the customer’s profile birthday, once per calendar year.</p>
     </div>
 
     <div class="col-md-4 coupon-amount-field">
@@ -83,6 +94,15 @@
             </label>
         </div>
     </div>
+    <div class="col-md-8 d-flex align-items-center">
+        <label class="d-flex align-items-center gap-2" style="cursor:pointer; margin-top:28px;">
+            <input type="checkbox" name="first_purchase_only" value="1"
+                   {{ old('first_purchase_only', optional($coupon)->first_purchase_only ?? false) ? 'checked' : '' }}
+                   style="width:18px; height:18px; accent-color:var(--df-primary);">
+            <span class="df-form-label mb-0">First purchase only</span>
+        </label>
+        <p class="df-form-hint mb-0 ms-3">Requires a new email address and phone number with no previous orders.</p>
+    </div>
 </div>
 
 <script>
@@ -91,15 +111,18 @@
         const amountField = document.querySelector('.coupon-amount-field');
         const buyGetFields = document.querySelectorAll('.buy-get-field');
         const coinsField = document.querySelector('.coins-field');
+        const birthdayDiscountField = document.querySelector('.birthday-discount-field');
         const amountInput = document.querySelector('input[name="amount"]');
 
         function updateCouponFields() {
             const isBuyGet = typeSelect.value === 'buy_get';
             const isCoins = typeSelect.value === 'gehna_coins';
+            const isBirthday = typeSelect.value === 'birthday';
             amountField.style.display = isBuyGet || isCoins ? 'none' : '';
-            amountInput.required = !isBuyGet && !isCoins;
+            amountInput.required = isBirthday || (!isBuyGet && !isCoins);
             buyGetFields.forEach((field) => field.style.display = isBuyGet ? '' : 'none');
             coinsField.style.display = isCoins ? '' : 'none';
+            birthdayDiscountField.style.display = isBirthday ? '' : 'none';
         }
 
         typeSelect.addEventListener('change', updateCouponFields);

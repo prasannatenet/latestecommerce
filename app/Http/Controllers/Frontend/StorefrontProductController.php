@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\Combo;
 use App\Models\Wishlist;
 use App\Models\ProductPriceHistory;
+use App\Models\Setting;
 use App\Services\ProductRecommendationService;
 use App\Services\CustomerActivityService;
 use Illuminate\Support\Facades\Auth;
@@ -34,6 +35,10 @@ class StorefrontProductController extends Controller
                 'videos',
                 'variations.images',
                 'attributes.values',
+                'upsellProducts.images',
+                'upsellProducts.variations',
+                'crossSellProducts.images',
+                'crossSellProducts.variations',
             ])
             ->withCount('reviews')
             ->withAvg('reviews', 'rating')
@@ -72,6 +77,8 @@ class StorefrontProductController extends Controller
                 ->limit(8)
                 ->get()
             : collect();
+        $upsellProducts = $product->upsellProducts->where('is_active', true)->values();
+        $crossSellProducts = $product->crossSellProducts->where('is_active', true)->values();
         $frequentlyBoughtTogether = $recommendations->forProduct($product, 6);
         $comboOffers = Combo::query()
             ->active()
@@ -93,6 +100,9 @@ class StorefrontProductController extends Controller
         $history = $product->priceHistories()->oldest('effective_at')->get();
         $previousHistory = $history->count() > 1 ? $history[$history->count() - 2] : null;
         $latestHistory = $history->last();
+        $setting = Setting::query()->first();
+        $returnDays = $product->return_days ?? $setting?->default_return_days;
+        $exchangeDays = $product->exchange_days ?? $setting?->default_exchange_days;
 
         return view('frontend.product-detail', [
             'product' => $product,
@@ -103,6 +113,8 @@ class StorefrontProductController extends Controller
             'averageRating' => (float) ($product->reviews_avg_rating ?? 0),
             'ratingCounts' => $ratingCounts,
             'relatedProducts' => $relatedProducts,
+            'upsellProducts' => $upsellProducts,
+            'crossSellProducts' => $crossSellProducts,
             'frequentlyBoughtTogether' => $frequentlyBoughtTogether,
             'comboOffers' => $comboOffers,
             'wishlistProductIds' => $wishlistProductIds,
@@ -110,6 +122,8 @@ class StorefrontProductController extends Controller
             'priceHistory' => $history,
             'previousPriceHistory' => $previousHistory,
             'latestPriceHistory' => $latestHistory,
+            'returnDays' => $returnDays,
+            'exchangeDays' => $exchangeDays,
         ]);
     }
 

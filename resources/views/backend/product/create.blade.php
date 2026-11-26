@@ -133,80 +133,12 @@
                 </div>
             </div>
 
-            {{-- Pricing --}}
-            <div class="df-card">
-                <div class="df-card-header">
-                    <h5 class="df-card-title"><i class="bi bi-currency-rupee"></i> Pricing</h5>
-                </div>
-                <div class="df-card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="df-form-label">Regular Price (₹) <span class="text-danger">*</span></label>
-                            <input type="number" name="base_price" id="basePrice" class="df-form-control" step="0.01"
-                                   placeholder="0.00" value="{{ old('base_price') }}" required oninput="calculateSalePrice()">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="df-form-label">Discount Type</label>
-                            <select name="discount_type" id="discountType" class="df-form-select" onchange="calculateSalePrice()">
-                                <option value="">No discount</option>
-                                <option value="percentage" {{ old('discount_type') === 'percentage' ? 'selected' : '' }}>Percentage (%)</option>
-                                <option value="fixed" {{ old('discount_type') === 'fixed' ? 'selected' : '' }}>Fixed amount (₹)</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="df-form-label">Discount Value</label>
-                            <input type="number" name="discount_value" id="discountValue" class="df-form-control" step="0.01" min="0"
-                                   placeholder="0" value="{{ old('discount_value') }}" oninput="calculateSalePrice()" disabled>
-                        </div>
-                        <div class="col-12">
-                            <label class="df-form-label">Calculated Sale Price (₹)</label>
-                            <input type="number" name="sale_price" id="salePrice" class="df-form-control" step="0.01"
-                                   placeholder="Calculated automatically" value="{{ old('sale_price') }}" readonly>
-                            <p class="df-form-hint" id="discountSummary">Choose a discount type to calculate the sale price.</p>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <label class="df-form-label">Price change reason</label>
-                        <input type="text" name="price_change_reason" class="df-form-control" maxlength="255" value="{{ old('price_change_reason') }}" placeholder="Optional note for the price record">
-                    </div>
-                </div>
-            </div>
-
-            {{-- Inventory (Simple Only) --}}
-            <div id="simpleFields" class="df-card">
-                <div class="df-card-header">
-                    <h5 class="df-card-title"><i class="bi bi-box-seam"></i> Inventory</h5>
-                </div>
-                <div class="df-card-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="df-form-label">SKU</label>
-                            <input type="text" name="sku" class="df-form-control" placeholder="Stock Keeping Unit"
-                                   value="{{ old('sku') }}">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="df-form-label">Stock Quantity</label>
-                            <input type="number" name="stock" class="df-form-control" placeholder="0"
-                                   value="{{ old('stock', 0) }}">
-                        </div>
-                    </div>
-                    <div class="row g-3 mt-1">
-                        <div class="col-md-6">
-                            <div class="df-form-check">
-                                <input type="checkbox" name="manage_stock" value="1" id="manageStock"
-                                       {{ old('manage_stock') ? 'checked' : '' }}>
-                                <label for="manageStock">Manage Stock?</label>
-                            </div>
-                            <p class="df-form-hint">Enable stock management at product level</p>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="df-form-label">Weight (kg)</label>
-                            <input type="number" name="weight" class="df-form-control" step="0.01" placeholder="0.00"
-                                   value="{{ old('weight') }}">
-                        </div>
-                    </div>
-                </div>
-            </div>
+            @include('backend.product.partials.recommendations', [
+                'upsellProducts' => collect(),
+                'crossSellProducts' => collect(),
+                'selectedCrossSellCategory' => old('cross_sell_category_id'),
+                'currentProductId' => null,
+            ])
 
             {{-- Attributes (Variable Only) --}}
             <div id="variableFields" class="df-card" style="display:none;">
@@ -309,6 +241,83 @@
                     @endif
                 </div>
             </div>
+
+            {{-- Pricing --}}
+            <div class="df-card">
+                <div class="df-card-header">
+                    <h5 class="df-card-title"><i class="bi bi-currency-rupee"></i> Pricing</h5>
+                </div>
+                <div class="df-card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="df-form-label">Regular Price (₹) <span class="text-danger">*</span></label>
+                            <input type="number" name="base_price" id="basePrice" class="df-form-control" step="0.01"
+                                   placeholder="0.00" value="{{ old('base_price') }}" required oninput="calculateSalePrice()">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="df-form-label">Discount Type</label>
+                            <select name="discount_type" id="discountType" class="df-form-select" onchange="calculateSalePrice()">
+                                <option value="">No discount</option>
+                                <option value="percentage" {{ old('discount_type') === 'percentage' ? 'selected' : '' }}>Percentage (%)</option>
+                                <option value="fixed" {{ old('discount_type') === 'fixed' ? 'selected' : '' }}>Fixed amount (₹)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="df-form-label">Discount Value</label>
+                            <input type="number" name="discount_value" id="discountValue" class="df-form-control" step="0.01" min="0"
+                                   placeholder="0" value="{{ old('discount_value') }}" oninput="calculateSalePrice()" disabled>
+                        </div>
+                        <div class="col-12">
+                            <label class="df-form-label">Calculated Sale Price (₹)</label>
+                            <input type="number" name="sale_price" id="salePrice" class="df-form-control" step="0.01"
+                                   placeholder="Calculated automatically" value="{{ old('sale_price') }}" readonly>
+                            <p class="df-form-hint" id="discountSummary">Choose a discount type to calculate the sale price.</p>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="df-form-label">Price change reason</label>
+                        <input type="text" name="price_change_reason" class="df-form-control" maxlength="255" value="{{ old('price_change_reason') }}" placeholder="Optional note for the price record">
+                    </div>
+                </div>
+            </div>
+
+            {{-- Inventory (Simple Only) --}}
+            <div id="simpleFields" class="df-card">
+                <div class="df-card-header">
+                    <h5 class="df-card-title"><i class="bi bi-box-seam"></i> Inventory</h5>
+                </div>
+                <div class="df-card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="df-form-label">SKU</label>
+                            <input type="text" name="sku" class="df-form-control" placeholder="Stock Keeping Unit"
+                                   value="{{ old('sku') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="df-form-label">Stock Quantity</label>
+                            <input type="number" name="stock" class="df-form-control" placeholder="0"
+                                   value="{{ old('stock', 0) }}">
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <div class="df-form-check">
+                                <input type="checkbox" name="manage_stock" value="1" id="manageStock"
+                                       {{ old('manage_stock') ? 'checked' : '' }}>
+                                <label for="manageStock">Manage Stock?</label>
+                            </div>
+                            <p class="df-form-hint">Enable stock management at product level</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="df-form-label">Weight (kg)</label>
+                            <input type="number" name="weight" class="df-form-control" step="0.01" placeholder="0.00"
+                                   value="{{ old('weight') }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @include('backend.product.partials.return-exchange-windows', ['product' => null])
 
         </div>
     </div>

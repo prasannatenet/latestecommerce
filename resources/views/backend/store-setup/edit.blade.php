@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 @section('content')
     <div class="df-page-header">
         <h1 class="df-page-title">Store Setup</h1>
@@ -95,6 +95,29 @@
                 </div>
             </div>
 
+            <div class="col-lg-6">
+                <div class="df-card h-100">
+                    <div class="df-card-header">
+                        <h5 class="df-card-title"><i class="bi bi-arrow-repeat"></i> Return &amp; Exchange Windows</h5>
+                    </div>
+                    <div class="df-card-body">
+                        <p class="text-muted">These values are the default number of days after delivery for every product. A product-specific value overrides its matching default.</p>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="default_return_days" class="df-form-label">Default return days</label>
+                                <input id="default_return_days" type="number" name="default_return_days" class="df-form-control" min="0" max="3650" step="1" value="{{ old('default_return_days', $setting?->default_return_days) }}" placeholder="No default">
+                                <small class="text-muted">Leave blank to not set a store-wide return window. Use 0 to disable returns by default.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="default_exchange_days" class="df-form-label">Default exchange days</label>
+                                <input id="default_exchange_days" type="number" name="default_exchange_days" class="df-form-control" min="0" max="3650" step="1" value="{{ old('default_exchange_days', $setting?->default_exchange_days) }}" placeholder="No default">
+                                <small class="text-muted">Leave blank to not set a store-wide exchange window. Use 0 to disable exchanges by default.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-12">
                 <div class="df-card">
                     <div class="df-card-header">
@@ -110,6 +133,35 @@
                                        value="{{ old('free_shipping_minimum', $setting?->free_shipping_minimum ?? 5000) }}">
                             </div>
                             <small class="text-muted">Orders at or above this subtotal will receive free shipping.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="df-card">
+                    <div class="df-card-header">
+                        <h5 class="df-card-title"><i class="bi bi-coin"></i> Gehna Coins</h5>
+                    </div>
+                    <div class="df-card-body">
+                        <div class="col-md-6">
+                            <label for="gehna_coin_count" class="df-form-label">Coin conversion rate</label>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span>Every</span>
+                                <input id="gehna_coin_count" type="number" name="gehna_coin_count" class="df-form-control" min="1" max="1000000000" step="1" required value="{{ old('gehna_coin_count', 100) }}" style="max-width:150px">
+                                <span>Gehna Coins = Rs</span>
+                                <input id="gehna_coin_amount" type="number" name="gehna_coin_amount" class="df-form-control" min="0.01" max="99999999.99" step="0.01" required value="{{ old('gehna_coin_amount', round((float) ($setting?->gehna_coin_value ?? 1) * 100, 2)) }}" style="max-width:150px">
+                            </div>
+                            <small class="text-muted">This sets redemption value only. For example, 100 coins = Rs 10 means each coin is worth Rs 0.10 at checkout.</small>
+                        </div>
+                        <div class="col-md-6 mt-3">
+                            <label for="gehna_coin_reward_percent" class="df-form-label">Coins earned per order value</label>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span>Customer earns</span>
+                                <input id="gehna_coin_reward_percent" type="number" name="gehna_coin_reward_percent" class="df-form-control" min="0" max="100" step="0.01" required value="{{ old('gehna_coin_reward_percent', $setting?->gehna_coin_reward_percent ?? 10) }}" style="max-width:150px">
+                                <span>% of order value credited as Gehna Coins</span>
+                            </div>
+                            <small class="text-muted">This sets earning only. Example: at 10%, a Rs 100 order earns 10 coins. Coins are credited after successful payment.</small>
                         </div>
                     </div>
                 </div>
@@ -170,3 +222,5 @@
         });
     </script>
 @endsection
+
+
